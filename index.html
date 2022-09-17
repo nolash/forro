@@ -1,0 +1,85 @@
+<html>
+	<head>
+		<script>
+let g_remote_key = undefined;
+let g_local_key = undefined;
+		</script>
+		<script src="node_modules/openpgp/dist/openpgp.min.js"></script>
+		<script defer src="/node_modules/alpinejs/dist/cdn.min.js"></script>
+		<script src="/key.js"></script>
+		<script>
+			// https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
+			function buf2hex(buffer) { // buffer is an ArrayBuffer
+				console.log('buf ' + buffer);
+				  return [...new Uint8Array(buffer)]
+				      .map(x => x.toString(16).padStart(2, '0'))
+				      .join('');
+			}
+			async function setUp(o) {
+				let r = await fetch('louis.asc');
+				let remote_key_src = await r.text();
+				let remote_key = await openpgp.readKey({
+					armoredKey: remote_key_src,
+				});
+				g_remote_key = remote_key;
+				let k = undefined;
+				try {
+					k = await getKey('deadbeef');
+				} catch {
+					k = await generatePGPKey();
+				};
+				g_local_key = k;
+				return [k.getKeyID().toHex(), g_remote_key.getKeyID().toHex()];
+			}
+			function foo() {
+				alert(g_local_key.getKeyID().toHex());
+			}
+			async function dispatch(s) {
+				let sb = new TextEncoder("utf-8").encode(s);
+				let digest = await crypto.subtle.digest('SHA-256', sb);
+				let msg = await openpgp.createMessage({
+					text: s,
+				});
+				let enc = g_remote_key;
+				let m = await openpgp.encrypt({
+					encryptionKeys: enc,
+					format: 'binary',
+					message: msg,
+					config: { rejectCurves: new Set() },
+				});
+				let sig = await openpgp.sign({
+					signingKeys: g_local_key,
+					message: msg,
+					format: 'binary',
+					detached: true,
+					config: { rejectCurves: new Set() },
+				});
+				let pubkey = g_local_key.toPublic().write();
+				let pubkey_str = String.fromCharCode.apply(null, pubkey);
+
+				let sig_str = String.fromCharCode.apply(null, sig);
+
+				let rcpt = buf2hex(digest);
+
+				console.log({sig: btoa(sig_str), pubkey: btoa(pubkey_str), rcpt: rcpt, m: s});
+			};
+
+		</script>
+	</head>
+
+	<body>
+		<div x-init="[key, rkey] = await setUp(this);" x-data="{key: '(none)', rkey: '(none)', rcpt: '', content: ''}">
+			<h1 >Your identity:
+				<span x-text="key"></span>
+				<br/>Their identity: 
+				<span x-text="rkey"></span>
+				<br/>Your receipt:
+				<span x-text="rcpt"></span>
+			</h1>
+			<textarea x-model="content">
+			</textarea>
+			<button @click="rcpt = await dispatch(content)">sign, encrypt and send</button>
+		</div>
+	</body>
+
+</html>

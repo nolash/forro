@@ -1,0 +1,6 @@
+{
+	"dependencies": {
+		"alpinejs": "~3.10.3",
+		"openpgp": "5.5.0"
+	}
+}
