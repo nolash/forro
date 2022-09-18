@@ -3,38 +3,92 @@
 		<script>
 let g_remote_key = undefined;
 let g_local_key = undefined;
+let g_remote_key_id = '(none)';
+let g_local_key_id = '(none)';
+let g_data_endpoint = window.location.href;
+let g_counter = undefined;
 		</script>
 		<script src="node_modules/openpgp/dist/openpgp.min.js"></script>
 		<script defer src="/node_modules/alpinejs/dist/cdn.min.js"></script>
 		<script src="/key.js"></script>
 		<script>
+
+			// Thanks to:
 			// https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
 			function buf2hex(buffer) { // buffer is an ArrayBuffer
-				console.log('buf ' + buffer);
 				  return [...new Uint8Array(buffer)]
 				      .map(x => x.toString(16).padStart(2, '0'))
 				      .join('');
 			}
+
+			async function loadSettings() {
+				let rs = await fetch(window.location.href + '/settings.json', {
+					method: 'GET',
+				});
+				if (!rs.ok) {
+					stateChange('could not load settings');
+					throw('could not load settings');
+				}
+				return await rs.json();
+			}
+
 			async function setUp(o) {
-				let r = await fetch('louis.asc');
+				let k = undefined;
+				try {
+					stateChange('attempt load local signing key');
+					k = await getKey('deadbeef');
+				} catch {
+					stateChange('generate local signing key');
+					k = await generatePGPKey('deadbeef');
+				};
+
+				g_local_key = k;
+				g_local_key_id = k.getKeyID().toHex();
+
+				stateChange('load settings');
+				let settings = await loadSettings();
+				if (settings.data_endpoint !== undefined) {
+					stateChange('update data endpoint');
+					g_data_endpoint = settings.data_endpoint;
+				}
+
+				stateChange('load counter');
+				let c = localStorage.getItem('msg_count');
+				if (c == null) {
+					g_counter = 0;
+				} else {
+					g_counter = parseInt(c);
+				}
+
+				stateChange('load remote encryption key');
+				let r = await fetch(settings.remote_pubkey_url);
 				let remote_key_src = await r.text();
 				let remote_key = await openpgp.readKey({
 					armoredKey: remote_key_src,
 				});
 				g_remote_key = remote_key;
-				let k = undefined;
-				try {
-					k = await getKey('deadbeef');
-				} catch {
-					k = await generatePGPKey();
-				};
-				g_local_key = k;
-				return [k.getKeyID().toHex(), g_remote_key.getKeyID().toHex()];
+				g_remote_key_id = g_remote_key.getKeyID().toHex();
+				
+				stateChange('ready to send');
 			}
-			function foo() {
-				alert(g_local_key.getKeyID().toHex());
+
+			async function stateChange(s) {
+				const ev = new CustomEvent('messagestatechange', {
+					bubbles: true,
+					cancelable: false,
+					composed: true,
+					detail: {
+						s: s,
+						c: g_counter,
+						kr: g_remote_key_id,
+						kl: g_local_key_id,
+					},
+				});
+				window.dispatchEvent(ev);
 			}
+
 			async function dispatch(s) {
+				stateChange('encrypt message ' + g_counter);
 				let sb = new TextEncoder("utf-8").encode(s);
 				let digest = await crypto.subtle.digest('SHA-256', sb);
 				let msg = await openpgp.createMessage({
@@ -45,41 +99,87 @@ let g_local_key = undefined;
 					encryptionKeys: enc,
 					format: 'binary',
 					message: msg,
-					config: { rejectCurves: new Set() },
+				//	config: { rejectCurves: new Set() },
 				});
+				let em = await openpgp.createMessage({
+					binary: m, //_str,
+				});
+				//let emb = new TextEncoder("utf-8").encode(m);
+				let digest_enc = await crypto.subtle.digest('SHA-256', m);
+				stateChange('sign message ' + g_counter);
 				let sig = await openpgp.sign({
 					signingKeys: g_local_key,
-					message: msg,
+					message: em,
 					format: 'binary',
 					detached: true,
-					config: { rejectCurves: new Set() },
+				//	config: { rejectCurves: new Set() },
 				});
+
+				stateChange('encode request for message ' + g_counter);
 				let pubkey = g_local_key.toPublic().write();
 				let pubkey_str = String.fromCharCode.apply(null, pubkey);
-
 				let sig_str = String.fromCharCode.apply(null, sig);
 
-				let rcpt = buf2hex(digest);
+				let rcpt_unencrypted = buf2hex(digest);
+				let rcpt = buf2hex(digest_enc);
+				console.debug('digest for unencrypted message:', rcpt_unencrypted);
+				console.debug('digest for encrypted message:', rcpt);
 
-				console.log({sig: btoa(sig_str), pubkey: btoa(pubkey_str), rcpt: rcpt, m: s});
+				sig_b = btoa(sig_str);
+				pub_b = btoa(pubkey_str);
+
+				stateChange('send message ' + g_counter);
+				let req = await fetch(g_data_endpoint + '/msg' + g_counter, {
+					method: 'PUT',
+					body: m,
+					headers: {
+						'Content-Type': 'application/octet-stream',
+						'Authorization': 'PUBSIG pgp:' + pub_b + ':' + sig_b,
+					}
+				});
+						
+				stateChange('update local state, next message is: ' + g_counter);
+				g_counter += 1;
+				localStorage.setItem('msg_count', g_counter);
+
+				stateChange('ready to send next message');
+				return rcpt;
 			};
 
+			window.addEventListener('messagestatechange', (v) => {
+				console.debug('message state change:', v.detail.s);
+			});
 		</script>
 	</head>
 
 	<body>
-		<div x-init="[key, rkey] = await setUp(this);" x-data="{key: '(none)', rkey: '(none)', rcpt: '', content: ''}">
-			<h1 >Your identity:
-				<span x-text="key"></span>
-				<br/>Their identity: 
-				<span x-text="rkey"></span>
-				<br/>Your receipt:
-				<span x-text="rcpt"></span>
-			</h1>
-			<textarea x-model="content">
+		<div x-init="await setUp(this);" x-data="{
+			key: '(none)',
+			rkey: '(none)',
+			message_status: '(none)',
+			message_count: g_counter,
+			rcpt: ' ',
+			content: '',
+			
+			}">
+			<dl>
+				<dt>Application version:</dt>
+				<dd>0.0.1</dt>
+				<dt>Status:</dt>
+				<dd x-text="message_status" x-on:messagestatechange.window="message_status = $event.detail.s; message_count = $event.detail.c; key = $event.detail.kl, rkey = $event.detail.kr;"></dd>
+				<dt>Your identity:</dt>
+				<dd x-text="key"></dd>
+				<dt>Their identity:</dt>
+				<dd x-text="rkey"></dd>
+				<dt>Message number:</dt>
+				<dd x-text="message_count"></dd>
+				<dt>Your receipt:<dt>
+				<dd x-text="rcpt"></dd>
+			</dl>
+			<textarea cols=72 rows=10 x-model="content" >
 			</textarea>
-			<button @click="rcpt = await dispatch(content)">sign, encrypt and send</button>
+			<br/>
+			<button @click="r = await dispatch(content); rcpt = 'message ' + (message_count-1) + ': ' + r">sign, encrypt and send</button>
 		</div>
 	</body>
-
 </html>

@@ -1,0 +1,4 @@
+{
+	"remote_pubkey_url": "publickey.asc",
+	"data_endpoint": "http://localhost:8001"
+}

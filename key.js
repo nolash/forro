@@ -1,19 +1,23 @@
-async function generatePGPKey() {
+async function generatePGPKey(pwd) {
 	return new Promise(async (whohoo, doh) => {
-		console.log(openpgp.generateKey);
 		let v = await openpgp.generateKey({
-			type: 'ecc',
-			curve: 'secp256k1',
+			//type: 'ecc',
+			//curve: 'secp256k1',
+			type: 'rsa',
 			userIDs: [{name: "Ola Nordmann", email: "ola@nordmann.no" }],
-			passphrase: 'deadbeef',
+			passphrase: pwd,
 			format: 'armored',
 			config: { rejectCurves: new Set() },
 		});
-		console.log('pk ' + v.privateKey );
-		console.log('pubk ' + v.publicKey );
+		//console.debug('pk ' + v.privateKey );
+		//console.debug('pubk ' + v.publicKey );
 		localStorage.setItem('pgp-key', v.privateKey);
-		let k = openpgp.readKey({
+		let pk = await openpgp.readKey({
 			armoredKey: v.privateKey,
+		});
+		let k = await openpgp.decryptKey({
+			privateKey: pk,
+			passphrase: pwd,
 		});
 		whohoo(k);
 	});
@@ -22,7 +26,6 @@ async function generatePGPKey() {
 async function getKey(pwd) {
 	return new Promise(async (whohoo, doh) => {
 		let pk_armor = localStorage.getItem('pgp-key');
-		console.log('pk ' + pk_armor);
 		if (pk_armor === null) {
 			doh('no key');
 			return;
@@ -34,6 +37,8 @@ async function getKey(pwd) {
 			privateKey: pk,
 			passphrase: pwd,
 		});
+		//console.debug('pk ' + k.armor());
+		//console.debug('pubk ' + k.toPublic().armor());
 		whohoo(k);
 	});
 }	
