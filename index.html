@@ -9,6 +9,7 @@ let g_data_endpoint = window.location.href;
 let g_counter = undefined;
 		</script>
 		<script src="node_modules/openpgp/dist/openpgp.min.js"></script>
+		<script src="node_modules/jssha/dist/sha256.js"></script>
 		<script defer src="/node_modules/alpinejs/dist/cdn.min.js"></script>
 		<script src="/key.js"></script>
 		<script>
@@ -89,8 +90,12 @@ let g_counter = undefined;
 
 			async function dispatch(s) {
 				stateChange('encrypt message ' + g_counter);
-				let sb = new TextEncoder("utf-8").encode(s);
-				let digest = await crypto.subtle.digest('SHA-256', sb);
+				//let sb = new TextEncoder("utf-8").encode(s);
+				const sha_raw = new jsSHA("SHA-256", "TEXT", { encoding: "UTF8" });
+				sha_raw.update(s);
+				const digest = sha_raw.getHash("HEX");
+				console.log('digest', digest);
+				//let digest = await crypto.subtle.digest('SHA-256', sb);
 				let msg = await openpgp.createMessage({
 					text: s,
 				});
@@ -105,7 +110,10 @@ let g_counter = undefined;
 					binary: m, //_str,
 				});
 				//let emb = new TextEncoder("utf-8").encode(m);
-				let digest_enc = await crypto.subtle.digest('SHA-256', m);
+				const sha = new jsSHA("SHA-256", "UINT8ARRAY", { encoding: "UTF8" });
+				sha.update(m);
+				const digest_enc = sha.getHash("HEX");
+
 				stateChange('sign message ' + g_counter);
 				let sig = await openpgp.sign({
 					signingKeys: g_local_key,
@@ -120,9 +128,10 @@ let g_counter = undefined;
 				let pubkey_str = String.fromCharCode.apply(null, pubkey);
 				let sig_str = String.fromCharCode.apply(null, sig);
 
-				let rcpt_unencrypted = buf2hex(digest);
-				let rcpt = buf2hex(digest_enc);
-				console.debug('digest for unencrypted message:', rcpt_unencrypted);
+				//let rcpt_unencrypted = buf2hex(digest);
+				//let rcpt = buf2hex(digest_enc);
+				rcpt = digest_enc;
+				console.debug('digest for unencrypted message:', digest);
 				console.debug('digest for encrypted message:', rcpt);
 
 				sig_b = btoa(sig_str);
@@ -163,8 +172,8 @@ let g_counter = undefined;
 			
 			}">
 			<dl>
-				<dt>Application version:</dt>
-				<dd>0.0.1</dt>
+				<dt>Application:</dt>
+				<dd>forro v0.0.1 (GPLv3)</dt>
 				<dt>Status:</dt>
 				<dd x-text="message_status" x-on:messagestatechange.window="message_status = $event.detail.s; message_count = $event.detail.c; key = $event.detail.kl, rkey = $event.detail.kr;"></dd>
 				<dt>Your identity:</dt>
