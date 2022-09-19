@@ -1,3 +1,6 @@
+- 0.0.3
+	* add (optional) userid info for sender
+	* use funny names for default userid
 - 0.0.2
 	* add public key submission
 - 0.0.1

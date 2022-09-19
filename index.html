@@ -7,6 +7,8 @@ let g_remote_key = undefined;
 let g_local_key = undefined;
 let g_remote_key_id = '(none)';
 let g_local_key_id = '(none)';
+let g_remote_key_name = '?';
+let g_local_key_name = '?';
 let g_data_endpoint = window.location.href;
 let g_counter = undefined;
 		</script>
@@ -14,6 +16,7 @@ let g_counter = undefined;
 		<script src="node_modules/jssha/dist/sha256.js"></script>
 		<script defer src="node_modules/alpinejs/dist/cdn.min.js"></script>
 		<script src="key.js"></script>
+		<script src="name.js"></script>
 		<script>
 
 			// Thanks to:
@@ -45,12 +48,25 @@ let g_counter = undefined;
 					stateChange('attempt load local signing key');
 					k = await getKey('deadbeef');
 				} catch {
-					stateChange('generate local signing key');
-					k = await generatePGPKey('deadbeef');
+					stateChange('generate initial bogus name');
+					let name = generateName();
+					let uid = {
+						'name': name,
+						'email': 'test@devnull.holbrook.no',
+					};
+					console.debug('you will initially be called', uid.name);
+
+					stateChange('generate new local signing key');
+					k = await generatePGPKey('deadbeef', uid);
 				};
 
 				g_local_key = k;
 				g_local_key_id = k.getKeyID().toHex();
+
+				let kl = k.toPacketList();
+				let klf = kl.filterByTag(openpgp.enums.packet.userID);
+				g_local_key_name = klf[klf.length-1].name;
+
 
 				stateChange('load settings');
 				let settings = await loadSettings();
@@ -75,8 +91,10 @@ let g_counter = undefined;
 				});
 				g_remote_key = remote_key;
 				g_remote_key_id = g_remote_key.getKeyID().toHex();
-				
-				stateChange('ready to send');
+				g_remote_key.getPrimaryUser().then((v) => {
+					g_remote_key_name = v.user.userID.name;
+					stateChange('ready to send');
+				});
 			}
 
 			async function stateChange(s) {
@@ -87,8 +105,8 @@ let g_counter = undefined;
 					detail: {
 						s: s,
 						c: g_counter,
-						kr: g_remote_key_id,
-						kl: g_local_key_id,
+						kr: g_remote_key_id + ' (' + g_remote_key_name + ')',
+						kl: g_local_key_id + ' (' + g_local_key_name + ')',
 					},
 				});
 				window.dispatchEvent(ev);
