@@ -104,12 +104,27 @@ let g_current_message = undefined;
 				}
 			}
 
+			function pointer(pfx) {
+				let sha = new jsSHA("SHA-256", "TEXT");
+				sha.update(pfx);
+				let prefix_digest = sha.getHash("HEX");
+			
+				let identity_id = g_local_key.getFingerprint();
+				sha = new jsSHA("SHA-256", "HEX");
+				sha.update(prefix_digest);
+				sha.update(identity_id);
+				return sha.getHash("HEX");
+			}
+
 			async function dispatch(s) {
+				let pfx = msg_identifier();
+
 				stateChange('encrypt message ' + g_counter);
 				const sha_raw = new jsSHA("SHA-256", "TEXT", { encoding: "UTF8" });
 				sha_raw.update(s);
 				const digest = sha_raw.getHash("HEX");
 				console.log('digest', digest);
+
 				let msg = await openpgp.createMessage({
 					text: s,
 				});
@@ -122,15 +137,7 @@ let g_current_message = undefined;
 				let em = await openpgp.createMessage({
 					binary: m,
 				});
-				//let emb = new TextEncoder("utf-8").encode(m);
-				//const sha = new jsSHA("SHA-256", "UINT8ARRAY");
-				let pfx = msg_identifier();
-				//let pfx_b = new TextEncoder("utf-8").encode(pfx);
-				//console.log('ppffx', pfx_b, m);
-				//sha.update(pfx_b);
-				//sha.update(identity);
-				//const digest_enc = sha.getHash("HEX");
-
+				
 				stateChange('sign message ' + g_counter);
 				let sig = await openpgp.sign({
 					signingKeys: g_local_key,
@@ -144,11 +151,9 @@ let g_current_message = undefined;
 				let pubkey_str = String.fromCharCode.apply(null, pubkey);
 				let sig_str = String.fromCharCode.apply(null, sig);
 
-				//let rcpt_unencrypted = buf2hex(digest);
-				//let rcpt = buf2hex(digest_enc);
-				//rcpt = digest_enc;
+				rcpt = pointer(pfx);
 				console.debug('digest for unencrypted message:', digest);
-				//console.debug('digest for encrypted message:', rcpt);
+				console.debug('digest for encrypted message:', rcpt);
 
 				sig_b = btoa(sig_str);
 				pub_b = btoa(pubkey_str);
@@ -176,11 +181,6 @@ let g_current_message = undefined;
 			window.addEventListener('messagestatechange', (v) => {
 				console.debug('message state change:', v.detail.s);
 			});
-
-			//function toEndpointUrl(s) {
-			//	let u = g_data_endpoint + '/' + s;
-			//	return '<a href=\"' + u + '\">' + s + '</a>';
-			//}
 
 			function toEndpointUrl(s) {
 				return s;
