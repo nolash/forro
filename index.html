@@ -38,7 +38,7 @@ let g_current_message = undefined;
 				return await rs.json();
 			}
 
-			async function setUp(o) {
+			async function setUp() {
 				let k = undefined;
 				try {
 					stateChange('attempt load local signing key');
@@ -54,7 +54,7 @@ let g_current_message = undefined;
 				stateChange('load settings');
 				let settings = await loadSettings();
 				if (settings.data_endpoint !== undefined) {
-					stateChange('update data endpoint');
+					stateChange('update data endpoint to ' + settings.data_endpoint);
 					g_data_endpoint = settings.data_endpoint;
 				}
 
@@ -182,40 +182,39 @@ let g_current_message = undefined;
 				console.debug('message state change:', v.detail.s);
 			});
 
-			function toEndpointUrl(s) {
-				return s;
-			}
 		</script>
 	</head>
 
 	<body>
-		<div x-init="await setUp(this);" x-data="{
+		<div x-init="await setUp();" x-data="{
 			key: '(none)',
 			rkey: '(none)',
 			message_status: '(none)',
 			message_count: g_counter,
-			rcpt: ' ',
+			rcpt: '',
 			content: '',
-		
+			key_armor: undefined,
+			rkey_armor: undefined,
+
 			}">
 			<dl>
 				<dt>Application:</dt>
-				<dd>forro v0.0.1 (GPLv3)</dt>
+				<dd><a href="https://git.defalsify.org/cgit/forro">forro v0.0.1 (GPLv3)</a></dt>
 				<dt>Status:</dt>
-				<dd x-text="message_status" x-on:messagestatechange.window="message_status = $event.detail.s; message_count = $event.detail.c; key = $event.detail.kl, rkey = $event.detail.kr;"></dd>
+				<dd x-text="message_status" x-on:messagestatechange.window="message_status = $event.detail.s; message_count = $event.detail.c; key = $event.detail.kl; rkey = $event.detail.kr; if (key_armor === undefined && g_local_key !== undefined) { key_armor = g_local_key.armor(); }; if (rkey_armor === undefined && g_remote_key !== undefined) { rkey_armor = g_remote_key.armor(); };"></dd>
 				<dt>Your identity:</dt>
-				<dd x-text="key"></dd>
+				<dd><a x-text="key" x-bind:href="'data:text/plain;charset=utf-8,' + key_armor" download="privatekey.asc"></a></dd>
 				<dt>Their identity:</dt>
-				<dd x-text="rkey"></dd>
+				<dd><a x-text="rkey" x-bind:href="'data:text/plain;charset=utf-8,' + rkey_armor" download="publickey.asc"></a></dd>
 				<dt>Message number:</dt>
 				<dd x-text="message_count"></dd>
 				<dt>Your receipt:<dt>
-				<dd x-text="rcpt"></dd>
+				<dd><a x-bind:href="g_data_endpoint + '/' + rcpt" x-text="rcpt"></a></dd>
 			</dl>
 			<textarea cols=72 rows=10 x-model="content" >
 			</textarea>
 			<br/>
-			<button @click="r = await try_dispatch(content); rcpt = 'message ' + g_current_message + ': ' + toEndpointUrl(r);">sign, encrypt and send</button>
+			<button @click="r = await try_dispatch(content); rcpt = r;">sign, encrypt and send</button>
 		</div>
 	</body>
 </html>
