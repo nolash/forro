@@ -1,13 +1,14 @@
 <html>
 	<head>
 		<script>
+const PUBKEY_PFX  = 'pgp.publickey';
+
 let g_remote_key = undefined;
 let g_local_key = undefined;
 let g_remote_key_id = '(none)';
 let g_local_key_id = '(none)';
 let g_data_endpoint = window.location.href;
 let g_counter = undefined;
-let g_current_message = undefined;
 		</script>
 		<script src="node_modules/openpgp/dist/openpgp.min.js"></script>
 		<script src="node_modules/jssha/dist/sha256.js"></script>
@@ -65,7 +66,6 @@ let g_current_message = undefined;
 				} else {
 					g_counter = parseInt(c);
 				}
-				g_current_message = g_counter;
 
 				stateChange('load remote encryption key');
 				let r = await fetch(settings.remote_pubkey_url);
@@ -98,81 +98,104 @@ let g_current_message = undefined;
 				try {
 					return await dispatch(s)
 				} catch(e) {
+					console.error(e);
 					stateChange('send fail: ' + e);
 					return 'failed';
 					// on fail the msg count will be wrong in error message
 				}
 			}
 
-			function pointer(pfx) {
-				let sha = new jsSHA("SHA-256", "TEXT");
-				sha.update(pfx);
-				let prefix_digest = sha.getHash("HEX");
-			
-				let identity_id = g_local_key.getFingerprint();
-				sha = new jsSHA("SHA-256", "HEX");
-				sha.update(prefix_digest);
-				sha.update(identity_id);
-				return sha.getHash("HEX");
-			}
-
 			async function dispatch(s) {
 				let pfx = msg_identifier();
 
-				stateChange('encrypt message ' + g_counter);
+				stateChange('sign and encrypt message ' + g_counter);
 				const sha_raw = new jsSHA("SHA-256", "TEXT", { encoding: "UTF8" });
 				sha_raw.update(s);
 				const digest = sha_raw.getHash("HEX");
-				console.log('digest', digest);
+				console.debug('digest for unencrypted message:', digest);
+	
+				const rcpt_public = await generatePointer(g_local_key, PUBKEY_PFX + g_remote_key.getFingerprint());
+				console.debug('digest for pubkey:', rcpt_public);
 
-				let msg = await openpgp.createMessage({
-					text: s,
+				const payload = "msg id: " + pfx + "\npubkey link: " + g_data_endpoint + "/" + rcpt_public + "\n\n" + s;
+				const msg = await openpgp.createMessage({
+					text: payload,
 				});
-				let enc = g_remote_key;
-				let m = await openpgp.encrypt({
-					encryptionKeys: enc,
-					format: 'binary',
+				let msg_sig_inner = await openpgp.sign({
+					signingKeys: g_local_key,
 					message: msg,
+					format: 'binary',
 				});
-				let em = await openpgp.createMessage({
-					binary: m,
+
+				//let envelope = await openpgp.createMessage({
+				//	text: g_local_key.toPublic().armor() + msg_sig_inner, //msg.armor() + sig_inner,
+				//});
+
+				const msg_sig = await openpgp.createMessage({
+					binary: msg_sig_inner,
+				});
+
+				const enc = await openpgp.encrypt({
+					encryptionKeys: g_remote_key,
+					format: 'binary',
+					message: msg_sig,
+				});
+
+				let envelope = await openpgp.createMessage({
+					binary: enc,
 				});
 				
-				stateChange('sign message ' + g_counter);
-				let sig = await openpgp.sign({
-					signingKeys: g_local_key,
-					message: em,
-					format: 'binary',
-					detached: true,
-				});
+				stateChange('sign and encode message request ' + g_counter);
+				const auth = await generateAuth(g_local_key, envelope);
 
-				stateChange('encode request for message ' + g_counter);
-				let pubkey = g_local_key.toPublic().write();
-				let pubkey_str = String.fromCharCode.apply(null, pubkey);
-				let sig_str = String.fromCharCode.apply(null, sig);
-
-				rcpt = pointer(pfx);
-				console.debug('digest for unencrypted message:', digest);
+				const rcpt = await generatePointer(g_local_key, pfx);
 				console.debug('digest for encrypted message:', rcpt);
-
-				sig_b = btoa(sig_str);
-				pub_b = btoa(pubkey_str);
 
 				stateChange('send message ' + g_counter);
 				let res = await fetch(g_data_endpoint + '/' + pfx, {
 					method: 'PUT',
-					body: m,
+					body: enc,
 					headers: {
 						'Content-Type': 'application/octet-stream',
-						'Authorization': 'PUBSIG pgp:' + pub_b + ':' + sig_b,
+						'Authorization': 'PUBSIG ' + auth,
 					}
 				});
 				
-				rcpt = res.text();
-				stateChange('update local state, next message is: ' + g_counter);
+				rcpt_remote = await res.text();
+				if (rcpt_remote.toLowerCase() != rcpt.toLowerCase()) {
+					throw "mutable ref mismatch between local and server; " + rcpt + " != " + rcpt_remote;
+				}
 				g_counter += 1;
+				stateChange('update local state, next message is: ' + g_counter);
 				localStorage.setItem('msg_count', g_counter);
-				g_current_message += 1;
+
+				stateChange('sign and encode public key store request');
+				const pubkey_bin = g_local_key.toPublic().write();
+				const msg_pubkey = await openpgp.createMessage({
+					binary: pubkey_bin,
+				});
+
+				const enc_pubkey = await openpgp.encrypt({
+					encryptionKeys: g_remote_key,
+					format: 'binary',
+					message: msg_pubkey,
+				});
+				let envelope_pubkey = await openpgp.createMessage({
+					binary: enc_pubkey,
+				});
+
+				const pubkey_auth = await generateAuth(g_local_key, envelope_pubkey);
+
+				stateChange('send publickey ' + g_local_key_id);
+				res = await fetch(g_data_endpoint + '/' + PUBKEY_PFX + g_remote_key.getFingerprint(), {
+					method: 'PUT',
+					body: enc_pubkey,
+					headers: {
+						'Content-Type': 'application/octet-stream',
+						'Authorization': 'PUBSIG ' + pubkey_auth,
+					}
+				});
+
 
 				stateChange('ready to send next message');
 				return rcpt;
@@ -199,7 +222,7 @@ let g_current_message = undefined;
 			}">
 			<dl>
 				<dt>Application:</dt>
-				<dd><a href="https://git.defalsify.org/cgit/forro">forro v0.0.1 (GPLv3)</a></dt>
+				<dd><a href="https://git.defalsify.org/cgit/forro">forro v0.0.2 (GPLv3)</a></dt>
 				<dt>Status:</dt>
 				<dd x-text="message_status" x-on:messagestatechange.window="message_status = $event.detail.s; message_count = $event.detail.c; key = $event.detail.kl; rkey = $event.detail.kr; if (key_armor === undefined && g_local_key !== undefined) { key_armor = g_local_key.armor(); }; if (rkey_armor === undefined && g_remote_key !== undefined) { rkey_armor = g_remote_key.armor(); };"></dd>
 				<dt>Your identity:</dt>

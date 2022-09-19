@@ -1,6 +1,6 @@
 {
 	"name": "forro",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"license": "GPLv3",
 	"author": "Louis Holbrook <dev@holbrook.no> (https://holbrook.no)",
 	"dependencies": {
