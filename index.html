@@ -56,17 +56,16 @@ let g_counter = undefined;
 			}
 			
 			async function unlockLocalKey(pwd) {
-				return new Promise(async (whohoo, doh) => {
-					try {
-						stateChange('check existing key');
-						g_local_key = await getKey(pwd);
-					} catch(e) {
-						doh(e);
-					}
-					const decrypted = g_local_key.isDecrypted()
-					stateChange('found key ' + g_local_key.getKeyID().toHex() + ' (decrypted: ' + decrypted + ')');
-					whohoo(decrypted);
-				});
+				try {
+					stateChange('check existing key');
+					g_local_key = await getKey(pwd);
+				} catch(e) {
+					console.error(e);
+					return false;
+				}
+				const decrypted = g_local_key.isDecrypted()
+				stateChange('found key ' + g_local_key.getKeyID().toHex() + ' (decrypted: ' + decrypted + ')');
+				return decrypted;
 			}
 
 			async function applyLocalKey() {
@@ -328,7 +327,11 @@ let g_counter = undefined;
 
 			x-show='!have_passphrase'>
 			<input name="pwd" type="password" x-model='passphrase_cache' x-bind:placeholder='passphrase_status' />
-			<button @click='have_passphrase = await setPwd(passphrase_cache); if (!have_passphrase) { passphrase_status = "wrong passphrase";  passphrase_cache = ""; };' >go</button>
+			<button x-data="{
+				go_label: 'go',
+				}"
+				x-text='go_label'
+				@click='have_passphrase = await setPwd(passphrase_cache); if (!have_passphrase) { passphrase_status = "wrong passphrase";  go_label = "go again"; passphrase_cache = ""; };' ></button>
 			<button x-show='!key' @click='have_passphrase = true; await setPwd();' >without passphrase</button>
 		</div>
 		<div x-show='have_passphrase' x-init="await setUp();" x-data="{

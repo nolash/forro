@@ -36,11 +36,6 @@ async function getKey(pwd) {
 		let pk = await openpgp.readKey({
 			armoredKey: pk_armor,
 		});
-//		let k = await openpgp.decryptKey({
-//			privateKey: pk,
-//			passphrase: pwd,
-//		});
-		//console.debug('pk ' + k.armor());
 		console.debug('our public key', pk.toPublic().armor());
 
 		if (pwd !== undefined) {
