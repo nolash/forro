@@ -18,14 +18,16 @@ async function generatePGPKey(pwd, uid) {
 		});
 		//console.debug('pk ' + v.privateKey );
 		console.debug('our public key', v.publicKey );
-		localStorage.setItem('pgp-key', v.privateKey);
 		let pk = await openpgp.readKey({
 			armoredKey: v.privateKey,
 		});
+		localStorage.setItem('pgp-key', pk.armor());
+		
 		let k = await openpgp.decryptKey({
 			privateKey: pk,
 			passphrase: pwd,
 		});
+
 		whohoo(k);
 	});
 }
@@ -40,12 +42,17 @@ async function getKey(pwd) {
 		let pk = await openpgp.readKey({
 			armoredKey: pk_armor,
 		});
+//		let k = await openpgp.decryptKey({
+//			privateKey: pk,
+//			passphrase: pwd,
+//		});
+		//console.debug('pk ' + k.armor());
+		console.debug('our public key', pk.toPublic().armor());
 		let k = await openpgp.decryptKey({
 			privateKey: pk,
 			passphrase: pwd,
 		});
-		//console.debug('pk ' + k.armor());
-		console.debug('our public key', k.toPublic().armor());
+
 		whohoo(k);
 	});
 }
@@ -77,4 +84,40 @@ async function generatePointer(pk, pfx) {
 	sha.update(prefix_digest);
 	sha.update(identity_id);
 	return sha.getHash("HEX");
+}
+
+// robbed from https://www.w3resource.com/javascript/form/email-validation.php
+function validateEmail(mail) {
+	if (/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(mail)) {
+		return true;
+	}
+	return false;
+}
+
+async function identify(pk, name, email, pwd) {
+	return new Promise(async (whohoo, doh) => {
+		const u = openpgp.UserIDPacket.fromObject({
+			name: name,
+			email: email,
+			comment: 'manual entry on forro',
+		});
+		let l = pk.toPacketList();
+		l.push(u);
+
+		const pk_new = new openpgp.PrivateKey(l);
+		const pk_e = await openpgp.encryptKey({
+			privateKey: pk_new,
+			passphrase: pwd,
+
+		});
+
+		localStorage.setItem('pgp-key', pk_e.armor());
+
+		const k = await openpgp.decryptKey({
+			privateKey: pk_e,
+			passphrase: pwd,
+		});
+
+		whohoo(k);
+	});
 }

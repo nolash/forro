@@ -9,6 +9,7 @@ let g_remote_key_id = '(none)';
 let g_local_key_id = '(none)';
 let g_remote_key_name = '?';
 let g_local_key_name = '?';
+let g_local_key_identified = false;
 let g_data_endpoint = window.location.href;
 let g_counter = undefined;
 		</script>
@@ -42,6 +43,15 @@ let g_counter = undefined;
 				return await rs.json();
 			}
 
+			function getEffectiveName(k) {
+				let kl = k.toPacketList();
+				let klf = kl.filterByTag(openpgp.enums.packet.userID);
+				if (klf.length > 1) {
+					g_local_key_identified = true;
+				}
+				return klf[klf.length-1].name;
+			}
+
 			async function setUp() {
 				let k = undefined;
 				try {
@@ -62,11 +72,8 @@ let g_counter = undefined;
 
 				g_local_key = k;
 				g_local_key_id = k.getKeyID().toHex();
-
-				let kl = k.toPacketList();
-				let klf = kl.filterByTag(openpgp.enums.packet.userID);
-				g_local_key_name = klf[klf.length-1].name;
-
+				g_local_key_name = getEffectiveName(k);
+				
 
 				stateChange('load settings');
 				let settings = await loadSettings();
@@ -112,9 +119,9 @@ let g_counter = undefined;
 				window.dispatchEvent(ev);
 			}
 
-			async function try_dispatch(s) {
+			async function try_dispatch(s, name, email) {
 				try {
-					return await dispatch(s)
+					return await dispatch(s, name, email)
 				} catch(e) {
 					console.error(e);
 					stateChange('send fail: ' + e);
@@ -123,7 +130,25 @@ let g_counter = undefined;
 				}
 			}
 
-			async function dispatch(s) {
+			async function tryIdentify(name, email) {
+				if (g_local_key_identified) {
+					return false;
+				}
+				g_local_key = await identify(g_local_key, name, email, 'deadbeef');
+				g_local_key_name = getEffectiveName(g_local_key);
+				await stateChange('apply name change: ' + g_local_key_name);
+				console.debug('updated public key', g_local_key.toPublic().armor());
+				g_local_key_identified = true;
+			}
+
+			async function dispatch(s, name, email) {
+				if (name) {
+					if (!validateEmail(email)) {
+						throw 'invalid email: ' + email;
+					}
+					await tryIdentify(name, email);
+				}
+
 				let pfx = msg_identifier();
 
 				stateChange('sign and encrypt message ' + g_counter);
@@ -236,13 +261,17 @@ let g_counter = undefined;
 			content: '',
 			key_armor: undefined,
 			rkey_armor: undefined,
+			defaultname: true,
+			identify: false,
+			realname: '',
+			realemail: '',
 
 			}">
 			<dl>
 				<dt>Application:</dt>
-				<dd><a href="https://git.defalsify.org/cgit/forro">forro v0.0.2 (GPLv3)</a></dt>
+				<dd><a href="https://git.defalsify.org/cgit/forro">forro v0.0.3 (GPLv3)</a></dt>
 				<dt>Status:</dt>
-				<dd x-text="message_status" x-on:messagestatechange.window="message_status = $event.detail.s; message_count = $event.detail.c; key = $event.detail.kl; rkey = $event.detail.kr; if (key_armor === undefined && g_local_key !== undefined) { key_armor = g_local_key.armor(); }; if (rkey_armor === undefined && g_remote_key !== undefined) { rkey_armor = g_remote_key.armor(); };"></dd>
+				<dd x-text="message_status" x-on:messagestatechange.window="message_status = $event.detail.s; message_count = $event.detail.c; key = $event.detail.kl; rkey = $event.detail.kr; if (key_armor === undefined && g_local_key !== undefined) { key_armor = g_local_key.armor(); }; if (rkey_armor === undefined && g_remote_key !== undefined) { rkey_armor = g_remote_key.armor(); }; defaultname = !g_local_key_identified;"></dd>
 				<dt>Your identity:</dt>
 				<dd><a x-text="key" x-bind:href="'data:text/plain;charset=utf-8,' + key_armor" download="privatekey.asc"></a></dd>
 				<dt>Their identity:</dt>
@@ -255,7 +284,18 @@ let g_counter = undefined;
 			<textarea cols=72 rows=10 x-model="content" >
 			</textarea>
 			<br/>
-			<button @click="r = await try_dispatch(content); rcpt = r;">sign, encrypt and send</button>
+			<div x-show='defaultname'>
+				<select @change='identify = true;'>
+					<option value=0>Stay anonymous</option>
+					<option value=1>Identify yourself</option>
+				</select>
+				<div x-show="identify">
+					<input name="id_name" placeholder="name" x-model="realname" /> <input name="id_email" placeholder="email" x-model="realemail" />
+				</div>
+			</div>
+			<div>
+				<button @click="r = await try_dispatch(content, realname, realemail); rcpt = r;">sign, encrypt and send</button>
+			</div>
 		</div>
 	</body>
 </html>
