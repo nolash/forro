@@ -44,13 +44,17 @@ async function getKey(pwd) {
 		console.debug('our public key', pk.toPublic().armor());
 
 		if (pwd !== undefined) {
-			pk = await openpgp.decryptKey({
+			openpgp.decryptKey({
 				privateKey: pk,
 				passphrase: pwd,
+			}).then((pk) => {
+				whohoo(pk);
+			}).catch((e) => {
+				doh(e);
 			});
+		} else {
+			whohoo(pk);
 		}
-
-		whohoo(pk);
 	});
 }
 
