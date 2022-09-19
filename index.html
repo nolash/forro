@@ -2,7 +2,9 @@
 	<head>
 		<script>
 const PUBKEY_PFX  = 'pgp.publickey';
-
+let g_passphrase = undefined;
+let g_passphrase_use = true;
+let g_passphrase_time = new Date(0);
 let g_remote_key = undefined;
 let g_local_key = undefined;
 let g_remote_key_id = '(none)';
@@ -49,39 +51,26 @@ let g_counter = undefined;
 				if (klf.length > 1) {
 					g_local_key_identified = true;
 				}
+				console.log('klf', klf[0]);
 				return klf[klf.length-1].name;
 			}
-
-			async function setUp() {
-				let k = undefined;
+			
+			async function unlockLocalKey(pwd) {
 				try {
-					stateChange('attempt load local signing key');
-					k = await getKey('deadbeef');
-				} catch {
-					stateChange('generate initial bogus name');
-					let name = generateName();
-					let uid = {
-						'name': name,
-						'email': 'test@devnull.holbrook.no',
-					};
-					console.debug('you will initially be called', uid.name);
-
-					stateChange('generate new local signing key');
-					k = await generatePGPKey('deadbeef', uid);
-				};
-
-				g_local_key = k;
-				g_local_key_id = k.getKeyID().toHex();
-				g_local_key_name = getEffectiveName(k);
-				
-
-				stateChange('load settings');
-				let settings = await loadSettings();
-				if (settings.data_endpoint !== undefined) {
-					stateChange('update data endpoint to ' + settings.data_endpoint);
-					g_data_endpoint = settings.data_endpoint;
+					stateChange('check existing key');
+					g_local_key = await getKey(pwd);
+				} catch(e) {
+					return false;	
 				}
+				const decrypted = g_local_key.isDecrypted()
+				stateChange('found key ' + g_local_key.getKeyID().toHex() + ' (decrypted: ' + decrypted + ')');
+				return decrypted;
+			}
 
+			async function applyLocalKey() {
+				g_local_key_id = g_local_key.getKeyID().toHex();
+				g_local_key_name = getEffectiveName(g_local_key);
+				
 				stateChange('load counter');
 				let c = localStorage.getItem('msg_count');
 				if (c == null) {
@@ -89,8 +78,18 @@ let g_counter = undefined;
 				} else {
 					g_counter = parseInt(c);
 				}
+				stateChange('ready to send');
 
-				stateChange('load remote encryption key');
+			}
+
+			async function setUp() {
+				stateChange('load settings');
+				let settings = await loadSettings();
+				if (settings.data_endpoint !== undefined) {
+					stateChange('update data endpoint to ' + settings.data_endpoint);
+					g_data_endpoint = settings.data_endpoint;
+				}
+
 				let r = await fetch(settings.remote_pubkey_url);
 				let remote_key_src = await r.text();
 				let remote_key = await openpgp.readKey({
@@ -100,26 +99,36 @@ let g_counter = undefined;
 				g_remote_key_id = g_remote_key.getKeyID().toHex();
 				g_remote_key.getPrimaryUser().then((v) => {
 					g_remote_key_name = v.user.userID.name;
-					stateChange('ready to send');
+					stateChange('loaded remote encryption key');
 				});
 			}
 
 			async function stateChange(s) {
+				let k_remote_str = '';
+				let k_local_str = '';
+				if (g_remote_key !== undefined) {
+					k_remote_str = g_remote_key_id + ' (' + g_remote_key_name + ')';
+				}
+				if (g_local_key !== undefined) {
+					k_local_str = g_local_key_id + ' (' + g_local_key_name + ')';
+				}
+
 				const ev = new CustomEvent('messagestatechange', {
 					bubbles: true,
 					cancelable: false,
 					composed: true,
+					
 					detail: {
 						s: s,
 						c: g_counter,
-						kr: g_remote_key_id + ' (' + g_remote_key_name + ')',
-						kl: g_local_key_id + ' (' + g_local_key_name + ')',
+						kr: k_remote_str,
+						kl: k_local_str,
 					},
 				});
 				window.dispatchEvent(ev);
 			}
 
-			async function try_dispatch(s, name, email) {
+			async function tryDispatch(s, name, email) {
 				try {
 					return await dispatch(s, name, email)
 				} catch(e) {
@@ -243,35 +252,90 @@ let g_counter = undefined;
 				stateChange('ready to send next message');
 				return rcpt;
 			};
+		
+			async function createLocalKey(pwd) {
+				stateChange('generate new local signing key');
+				const uid = {
+					name: generateName(),
+					email: 'foo@devnull.holbrook.no',
+				};
+				g_local_key = await generatePGPKey(pwd, uid);
+				console.debug('you will initially be called', uid.name);
+			}
+
+			async function setPwd(pwd) {
+				if (pwd === undefined) {
+					if (g_local_key === undefined) {
+						g_passphrase_use = false;
+						await createLocalKey();
+					}
+				} else if (pwd.length == 0) {
+					return false;
+				} else if (g_local_key === undefined) {
+					await createLocalKey(pwd);
+				}
+				const  r = await unlockLocalKey(pwd);
+				if (r) {
+					applyLocalKey();
+				}
+				return r;
+			}
 
 			window.addEventListener('messagestatechange', (v) => {
 				console.debug('message state change:', v.detail.s);
 			});
 
+
+
 		</script>
 	</head>
 
-	<body>
-		<div x-init="await setUp();" x-data="{
-			key: '(none)',
-			rkey: '(none)',
-			message_status: '(none)',
-			message_count: g_counter,
+	<body x-data="{
+		have_passphrase: false,
+		key: '',
+		rkey: '',
+		key_armor: undefined,
+		rkey_armor: undefined,
+		defaultname: true,
+		identify: false,
+		realname: '',
+		realemail: '',
+		message_status: '',
+		message_count: g_counter,
+
+		}"
+>
+		<h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
+		
+		<div x-data="{
+			passphrase_cache: '',
+			passphrase_status: 'please create key',
+		     }"
+		     
+		      x-init="
+		      have_passphrase = await unlockLocalKey();
+		      if (key.length > 0) {
+				if (have_passphrase) {
+					applyLocalKey();
+				} else {
+					passphrase_status = 'please unlock key';
+				}
+			}"
+
+			x-show='!have_passphrase'>
+			<input name="pwd" type="password" x-model='passphrase_cache' x-bind:placeholder='passphrase_status' />
+			<button @click='have_passphrase = true; await setPwd(passphrase_cache);' >go</button>
+			<button x-show='!key' @click='have_passphrase = true; await setPwd();' >without passphrase</button>
+		</div>
+		<div x-show='have_passphrase' x-init="await setUp();" x-data="{
 			rcpt: '',
 			content: '',
-			key_armor: undefined,
-			rkey_armor: undefined,
-			defaultname: true,
-			identify: false,
-			realname: '',
-			realemail: '',
-
+			
 			}">
 			<dl>
-				<dt>Application:</dt>
-				<dd><a href="https://git.defalsify.org/cgit/forro">forro v0.0.3 (GPLv3)</a></dt>
 				<dt>Status:</dt>
 				<dd x-text="message_status" x-on:messagestatechange.window="message_status = $event.detail.s; message_count = $event.detail.c; key = $event.detail.kl; rkey = $event.detail.kr; if (key_armor === undefined && g_local_key !== undefined) { key_armor = g_local_key.armor(); }; if (rkey_armor === undefined && g_remote_key !== undefined) { rkey_armor = g_remote_key.armor(); }; defaultname = !g_local_key_identified;"></dd>
+
 				<dt>Your identity:</dt>
 				<dd><a x-text="key" x-bind:href="'data:text/plain;charset=utf-8,' + key_armor" download="privatekey.asc"></a></dd>
 				<dt>Their identity:</dt>
@@ -294,7 +358,7 @@ let g_counter = undefined;
 				</div>
 			</div>
 			<div>
-				<button @click="r = await try_dispatch(content, realname, realemail); rcpt = r;">sign, encrypt and send</button>
+				<button @click="r = await tryDispatch(content, realname, realemail); rcpt = r;">sign, encrypt and send</button>
 			</div>
 		</div>
 	</body>

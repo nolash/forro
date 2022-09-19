@@ -16,19 +16,13 @@ async function generatePGPKey(pwd, uid) {
 			format: 'armored',
 			//config: { rejectCurves: new Set() },
 		});
-		//console.debug('pk ' + v.privateKey );
-		console.debug('our public key', v.publicKey );
+		console.info('our public key', v.publicKey );
 		let pk = await openpgp.readKey({
 			armoredKey: v.privateKey,
 		});
 		localStorage.setItem('pgp-key', pk.armor());
-		
-		let k = await openpgp.decryptKey({
-			privateKey: pk,
-			passphrase: pwd,
-		});
 
-		whohoo(k);
+		whohoo(pk);
 	});
 }
 
@@ -48,12 +42,15 @@ async function getKey(pwd) {
 //		});
 		//console.debug('pk ' + k.armor());
 		console.debug('our public key', pk.toPublic().armor());
-		let k = await openpgp.decryptKey({
-			privateKey: pk,
-			passphrase: pwd,
-		});
 
-		whohoo(k);
+		if (pwd !== undefined) {
+			pk = await openpgp.decryptKey({
+				privateKey: pk,
+				passphrase: pwd,
+			});
+		}
+
+		whohoo(pk);
 	});
 }
 
