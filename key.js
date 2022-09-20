@@ -100,20 +100,24 @@ async function identify(pk, name, email, pwd) {
 		let l = pk.toPacketList();
 		l.push(u);
 
-		const pk_new = new openpgp.PrivateKey(l);
-		const pk_e = await openpgp.encryptKey({
-			privateKey: pk_new,
-			passphrase: pwd,
+		let pk_new = new openpgp.PrivateKey(l);
+		if (pwd !== undefined) {
+			pk_new = await openpgp.encryptKey({
+				privateKey: pk_new,
+				passphrase: pwd,
 
-		});
+			});
+		}
 
-		localStorage.setItem('pgp-key', pk_e.armor());
+		localStorage.setItem('pgp-key', pk_new.armor());
+		
+		if (pwd !== undefined) {
+			pk_new = await openpgp.decryptKey({
+				privateKey: pk_new,
+				passphrase: pwd,
+			});
+		}
 
-		const k = await openpgp.decryptKey({
-			privateKey: pk_e,
-			passphrase: pwd,
-		});
-
-		whohoo(k);
+		whohoo(pk_new);
 	});
 }

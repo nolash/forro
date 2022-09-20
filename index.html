@@ -4,7 +4,7 @@
 const PUBKEY_PFX  = 'pgp.publickey';
 let g_passphrase = undefined;
 let g_passphrase_use = true;
-let g_passphrase_time = new Date(0);
+let g_passphrase_time = 0;
 let g_remote_key = undefined;
 let g_local_key = undefined;
 let g_remote_key_id = '(none)';
@@ -73,7 +73,7 @@ let g_counter = undefined;
 				g_local_key_name = getEffectiveName(g_local_key);
 				
 				stateChange('load counter');
-				let c = localStorage.getItem('msg_count');
+				let c = localStorage.getItem('msg-count');
 				if (c == null) {
 					g_counter = 0;
 				} else {
@@ -140,11 +140,15 @@ let g_counter = undefined;
 				}
 			}
 
+			function getPassphrase() {
+				return g_passphrase;
+			}
+
 			async function tryIdentify(name, email) {
 				if (g_local_key_identified) {
 					return false;
 				}
-				g_local_key = await identify(g_local_key, name, email, 'deadbeef');
+				g_local_key = await identify(g_local_key, name, email, getPassphrase());
 				g_local_key_name = getEffectiveName(g_local_key);
 				await stateChange('apply name change: ' + g_local_key_name);
 				console.debug('updated public key', g_local_key.toPublic().armor());
@@ -220,7 +224,7 @@ let g_counter = undefined;
 				}
 				g_counter += 1;
 				stateChange('update local state, next message is: ' + g_counter);
-				localStorage.setItem('msg_count', g_counter);
+				localStorage.setItem('msg-count', g_counter);
 
 				stateChange('sign and encode public key store request');
 				const pubkey_bin = g_local_key.toPublic().write();
@@ -265,13 +269,14 @@ let g_counter = undefined;
 			}
 
 			async function setPwd(pwd) {
+				if (pwd.length == 0) {
+					pwd = undefined;
+				}
 				if (pwd === undefined) {
 					if (g_local_key === undefined) {
 						g_passphrase_use = false;
 						await createLocalKey();
 					}
-				} else if (pwd.length == 0) {
-					return false;
 				} else if (g_local_key === undefined) {
 					await createLocalKey(pwd);
 				}
@@ -281,6 +286,8 @@ let g_counter = undefined;
 				if (r) {
 					applyLocalKey();
 				}
+				g_passphrase = pwd;
+				g_passphrase_time = Date.now();
 				return r;
 			}
 
@@ -291,7 +298,8 @@ let g_counter = undefined;
 				g_local_key = undefined;
 				g_local_key_id = undefined;
 				g_local_key_identified = false;
-				g_passphrase = '';
+				g_counter = 0;
+				g_passphrase = undefined;
 				g_passphrase_time = new Date(0);
 				stateChange('deleted local key ' + key_id);
 				return true;
@@ -385,7 +393,7 @@ let g_counter = undefined;
 			rst: false,
 		     }">
 			<button x-show='key && !rst' @click='rst = true;'>Discard key</button>
-			<button x-show='rst' @dblclick='rst = false; passphrase_status = "please create new key"; have_passphrase = false; key = !purgeLocalKey();'>Double click to confirm discard key</button>
+			<button x-show='rst' @dblclick='rst = false; passphrase_status = "please create new key"; have_passphrase = false; key = !purgeLocalKey(); message_count = 0;'>Double click to confirm discard key</button>
 		</div>
 	</body>
 </html>
