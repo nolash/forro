@@ -19,6 +19,7 @@ const STATE = {
 	ACK_PUBKEY: 1 << 13,
 };
 const STATE_KEYS = Object.keys(STATE);
+const USE_HELP = true;
 
 let g_passphrase = undefined;
 let g_passphrase_use = true;
@@ -32,6 +33,7 @@ let g_local_key_name = '?';
 let g_local_key_identified = false;
 let g_data_endpoint = window.location.href;
 let g_state = 1;
+let g_helpstate = 0;
 let g_counter = undefined;
 		</script>
 		<script src="node_modules/openpgp/dist/openpgp.min.js"></script>
@@ -39,6 +41,7 @@ let g_counter = undefined;
 		<script defer src="node_modules/alpinejs/dist/cdn.min.js"></script>
 		<script src="key.js"></script>
 		<script src="name.js"></script>
+		<script src="help.js"></script>
 		<script>
 
 			// Thanks to:
@@ -381,6 +384,23 @@ let g_counter = undefined;
 				return true;
 			}
 
+			async function tryHelpFor(...k) {
+				if (!USE_HELP) {
+					return;
+				}
+				const r = await helpFor(g_helpstate, g_state, k);
+				g_helpstate = r.state;
+				const ev = new CustomEvent('help', {
+					bubbles: true,
+					cancelable: false,
+					composed: true,
+					detail: {
+						v: r.v,
+					},
+				});
+				window.dispatchEvent(ev);
+			}
+
 			window.addEventListener('messagestatechange', (v) => {
 				console.debug('message state change:', v.detail.state, debugState(v.detail.state), v.detail.s);
 			});
@@ -388,6 +408,11 @@ let g_counter = undefined;
 
 
 		</script>
+		<style type="text/css">
+div#helpdiv .old {
+	color: #aaa;
+};
+		</style>
 	</head>
 
 	<body x-data="{
@@ -447,7 +472,58 @@ let g_counter = undefined;
 		      >
 
 		<h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
+		<div > 
+			<div id="helpdiv" style="height: 7em;"
+					  x-show="USE_HELP"
+					  >
+				<template x-data="{
+					help_contents: [],
+					help_lastcount: 0,
+					help_cap: 8,
+					help_count: 0,
+					help_crsr: -1,
 
+					addHelpContents(v) {
+						for (let i = 0; i < v.length; i++) {
+							this.help_crsr += 1;
+							this.help_crsr %= this.help_cap;
+							this.help_contents[this.help_crsr] = v[i];
+							if (this.help_count < this.help_cap) {
+								this.help_count += 1;
+							}
+						}
+						if (v.length > 0) {
+							this.help_lastcount = v.length;
+						}
+					},
+
+					get helpContents() {
+						if (this.help_crsr < 0) {
+							return [];
+						}
+						let contents = [];
+						let c = (this.help_crsr - this.help_count + 1);
+						if (c < 0) {
+							c = this.help_count + c;
+						}
+						new_threshold = this.help_count - this.help_lastcount;
+						for (let i = 0; i < this.help_count; i++) {
+							c %= this.help_cap;
+							console.log('contents ', this.help_contents, contents, this.help_crsr, c);
+							is_old = i < new_threshold;
+							v = [this.help_contents[c], is_old ? 'old' : 'new'];
+							contents.push(v); //this.help_contents[c]);
+							c += 1;
+						}
+						return contents;
+					},
+					}"
+					x-init="tryHelpFor('welcome');"
+					x-for="(v) in helpContents"
+					@help.window="addHelpContents($event.detail.v);">
+					<p style="font-size: 0.5em; line-height: 0.4em;" x-html="v[0]" :class="v[1]" />
+				</template>
+			</div>
 		<hr/>
 		<div x-data="{
 			passphrase_cache: '',
@@ -482,7 +558,7 @@ let g_counter = undefined;
 				></button>
 				
 
-			<button x-show='!haveKey' @click='setPwd();' >without passphrase</button>
+			<button x-show='!haveKey' @click='tryHelpFor("nopass"); setPwd();' setPwd();' >without passphrase</button>
 		</div>
 		<div x-show='unlockedKey'
 			x-init='setUp();'
@@ -553,7 +629,7 @@ let g_counter = undefined;
 				<dt>Your receipt:<dt>
 				<dd><a x-bind:href="g_data_endpoint + '/' + rcpt" x-text="rcpt"></a></dd>
 			</dl>
-			<textarea cols=72 rows=10 x-model="content" >
+			<textarea cols=72 rows=10 x-model="content" @focus="tryHelpFor('writemsg');">
 			</textarea>
 			<br/>
 			<div x-data='{ 
