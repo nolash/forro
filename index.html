@@ -17,9 +17,9 @@ const STATE = {
 	PASSPHRASE_FAIL: 1 << 11,
 	ACK_MESSAGE: 1 << 12,
 	ACK_PUBKEY: 1 << 13,
+	HELP: 1 << 14,
 };
 const STATE_KEYS = Object.keys(STATE);
-const USE_HELP = true;
 
 let g_passphrase = undefined;
 let g_passphrase_use = true;
@@ -32,9 +32,10 @@ let g_local_key_id = '(none)';
 let g_local_key_name = '?';
 let g_local_key_identified = false;
 let g_data_endpoint = window.location.href;
-let g_state = 1;
+let g_state = 0;
 let g_helpstate = 0;
 let g_counter = undefined;
+
 		</script>
 		<script src="node_modules/openpgp/dist/openpgp.min.js"></script>
 		<script src="node_modules/jssha/dist/sha256.js"></script>
@@ -134,6 +135,13 @@ let g_counter = undefined;
 
 			async function setUp() {
 				let settings = await loadSettings();
+				if (settings.dev) {
+					stateChange("devmode on", STATE.DEV);
+				}
+				if (settings.help) {
+					stateChange("helpmode on", STATE.HELP);
+				}
+
 				if (settings.data_endpoint !== undefined) {
 					g_data_endpoint = settings.data_endpoint;
 					stateChange('updated data endpoint to ' + settings.data_endpoint);
@@ -385,9 +393,9 @@ let g_counter = undefined;
 			}
 
 			async function tryHelpFor(...k) {
-				if (!USE_HELP) {
-					return;
-				}
+				//if (!checkState(STATE.HELP)) {
+				//	return;
+				//}
 				const r = await helpFor(g_helpstate, g_state, k);
 				g_helpstate = r.state;
 				const ev = new CustomEvent('help', {
@@ -426,7 +434,11 @@ div#helpdiv .old {
 		},
 
 		get isDev() {
-			return this.last_state & STATE['DEV'] > 0;
+			return checkState(this.last_state, STATE.DEV);
+		},
+
+		get isHelp() {
+			return checkState(this.last_state, STATE.HELP);
 		},
 
 		get lastState() {
@@ -474,10 +486,10 @@ div#helpdiv .old {
 		<h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
 		<div > 
 			<div id="helpdiv" style="height: 7em;"
-					  x-show="USE_HELP"
+					  x-show="isHelp"
 					  >
 				<template x-data="{
-					help_display_count: 3,
+					help_display_count: 10,
 					help_contents: [],
 					help_lastcount: 0,
 					help_cap: 8,
@@ -503,12 +515,19 @@ div#helpdiv .old {
 							return [];
 						}
 						let contents = [];
-						let c = (this.help_crsr - this.help_display_count + 1);
-						if (c < 0) {
-							c = this.help_display_count + c;
+
+						let l = this.help_display_count;
+						if (l > this.help_count) {
+							l = this.help_count;
 						}
-						new_threshold = this.help_display_count - this.help_lastcount;
-						for (let i = 0; i < this.help_display_count; i++) {
+
+						let c = (this.help_crsr - l + 1);
+						if (c < 0) {
+							c = l + c;
+						}
+						
+						new_threshold = l - this.help_lastcount;
+						for (let i = 0; i < l; i++) {
 							c %= this.help_cap;
 							console.log('contents ', this.help_contents, contents, this.help_crsr, c);
 							is_old = i < new_threshold;
