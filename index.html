@@ -490,7 +490,7 @@ h1 {
 
 		      <h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
 		      
-		<div > 
+		<div id="app"> 
 			<div id="helpdiv" style="height: 6em;"
 					  x-show="isHelp"
 					  >
@@ -563,10 +563,10 @@ h1 {
 				</template>
 			</div>
 		<hr/>
-		<div x-data="{
+		<div id="localkey" x-data="{
 			passphrase_cache: '',
 			passphrase_status: '',
-			passphrase_default_status: 'please create key',
+			passphrase_default_status: 'create key with passphrase',
 			get passphraseStatus() {
 				return this.passphrase_status ? this.passphrase_status : this.passphrase_default_status;
 			},
@@ -598,7 +598,8 @@ h1 {
 
 			<button x-show='!haveKey' @click='tryHelpFor("nopass"); setPwd();' setPwd();' >without passphrase</button>
 		</div>
-		<div x-show='unlockedKey'
+		<div id="message_panel"
+			x-show='unlockedKey'
 			x-init='setUp();'
 			x-data="{
 				rcpt: '',
@@ -700,14 +701,15 @@ h1 {
 				</div>
 			</div>
 		</div>
-		<div x-data="{
+		<div id="reset"
+			x-data="{
 			rst: false,
 		     }">
 			<button x-show='haveKey && !rst' @click='rst = true;'>Discard key</button>
 			<button x-show='rst' @dblclick='rst = false; $dispatch("rst"); purgeLocalKey();'>Double click to confirm discard key</button>
 		</div>
 
-		<div x-show='isDev'>
+		<div id="dev" x-show='isDev'>
 		<hr/>
 		<h2>Devmode details</h2>
 			<dl>
