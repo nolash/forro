@@ -2,6 +2,18 @@
 	<head>
 		<script>
 const PUBKEY_PFX  = 'pgp.publickey';
+const STATE = {
+	DEV: 1,
+	PANIC: 2,
+	SETTINGS: 4,
+	REMOTE_KEY: 8,
+	LOCAL_KEY: 16,
+	LOCAL_KEY_DECRYPTED: 32,
+	PASSPHRASE_STORED: 64,
+	RTS: 128,
+};
+const STATE_KEYS = Object.keys(STATE);
+
 let g_passphrase = undefined;
 let g_passphrase_use = true;
 let g_passphrase_time = 0;
@@ -13,6 +25,7 @@ let g_local_key_id = '(none)';
 let g_local_key_name = '?';
 let g_local_key_identified = false;
 let g_data_endpoint = window.location.href;
+let g_state = 1;
 let g_counter = undefined;
 		</script>
 		<script src="node_modules/openpgp/dist/openpgp.min.js"></script>
@@ -33,6 +46,21 @@ let g_counter = undefined;
 			function msg_identifier() {
 				return 'msg' + g_counter;
 			}
+
+			function debugState(state) {
+				let s = '';
+				for (let i = 0; i < STATE_KEYS.length; i++) {
+					const v = 1 << i;
+					if ((v & state)> 0) {
+						const k = STATE_KEYS[i];
+						if (s.length > 0) {
+							s += ',';
+						}
+						s += k;
+					}
+				}
+				return s;
+			};
 
 			async function loadSettings() {
 				let rs = await fetch(window.location.href + '/settings.json', {
@@ -57,14 +85,21 @@ let g_counter = undefined;
 			
 			async function unlockLocalKey(pwd) {
 				try {
-					stateChange('check existing key');
 					g_local_key = await getKey(pwd);
 				} catch(e) {
 					console.error(e);
+					stateChange('could not unlock key (passphrase: ' + pwd !== undefined + ')');
 					return false;
 				}
+
+				let state = [STATE['LOCAL_KEY']];
+
 				const decrypted = g_local_key.isDecrypted()
-				stateChange('found key ' + g_local_key.getKeyID().toHex() + ' (decrypted: ' + decrypted + ')');
+				if (decrypted) {
+					state.push(STATE['LOCAL_KEY_DECRYPTED']);
+				}
+
+				stateChange('found key ' + g_local_key.getKeyID().toHex() + ' (decrypted: ' + decrypted + ')', state);
 				return decrypted;
 			}
 
@@ -84,13 +119,13 @@ let g_counter = undefined;
 			}
 
 			async function setUp() {
-				stateChange('load settings');
 				let settings = await loadSettings();
 				if (settings.data_endpoint !== undefined) {
-					stateChange('update data endpoint to ' + settings.data_endpoint);
 					g_data_endpoint = settings.data_endpoint;
+					stateChange('updated data endpoint to ' + settings.data_endpoint);
 				}
 
+				stateChange('loaded settings', STATE['SETTINGS']);
 				let r = await fetch(settings.remote_pubkey_url);
 				let remote_key_src = await r.text();
 				let remote_key = await openpgp.readKey({
@@ -104,7 +139,26 @@ let g_counter = undefined;
 				});
 			}
 
-			async function stateChange(s) {
+			async function stateChange(s, set_states, rst_states) {
+				if (!set_states) {
+					set_states = [];
+				} else if (!Array.isArray(set_states)) {
+					set_states = [set_states];
+				}
+				if (!rst_states) {
+					rst_states = [];
+				} else if (!Array.isArray(rst_states)) {
+					rst_states = [rst_states];
+				}
+				let new_state = g_state;
+				for (let i = 0; i < set_states.length; i++) {
+					let state = parseInt(set_states[i]);
+					new_state |= state;
+				}
+				let new_rst_state = 0;
+				for (let i = 0; i < rst_states.length; i++) {
+					let state = state & (0xffffffff & ~rst.states);
+				}
 				let k_remote_str = '';
 				let k_local_str = '';
 				if (g_remote_key !== undefined) {
@@ -113,6 +167,8 @@ let g_counter = undefined;
 				if (g_local_key !== undefined) {
 					k_local_str = g_local_key_id + ' (' + g_local_key_name + ')';
 				}
+
+				g_state = new_state;
 
 				const ev = new CustomEvent('messagestatechange', {
 					bubbles: true,
@@ -124,6 +180,7 @@ let g_counter = undefined;
 						c: g_counter,
 						kr: k_remote_str,
 						kl: k_local_str,
+						state: new_state,
 					},
 				});
 				window.dispatchEvent(ev);
@@ -183,10 +240,6 @@ let g_counter = undefined;
 					message: msg,
 					format: 'binary',
 				});
-
-				//let envelope = await openpgp.createMessage({
-				//	text: g_local_key.toPublic().armor() + msg_sig_inner, //msg.armor() + sig_inner,
-				//});
 
 				const msg_sig = await openpgp.createMessage({
 					binary: msg_sig_inner,
@@ -306,7 +359,7 @@ let g_counter = undefined;
 			}
 
 			window.addEventListener('messagestatechange', (v) => {
-				console.debug('message state change:', v.detail.s);
+				console.debug('message state change:', v.detail.s, v.detail.state);
 			});
 
 
@@ -327,16 +380,27 @@ let g_counter = undefined;
 		message_status: '',
 		message_count: g_counter,
 		passphrase_status: 'please create key',
+		last_state: 0,
+		last_state_string: '',
+		dev: false,
+
+		get haveSettings() {
+			return this.last_state & STATE['SETTINGS'] > 0;
+		},
+
+		get isDev() {
+			return this.last_state & STATE['DEV'] > 0;
+		},
+
+		get lastState() {
+			return debugState(this.last_state);
+		},
 
 		}"
->
-		<h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
-		
-		<div x-data="{
-			passphrase_cache: '',
-		     }"
-		     
-		      x-init="
+
+		x-on:messagestatechange.window="last_state = $event.detail.state; last_state_string = debugState(last_state);"
+
+		x-init="
 		      have_passphrase = await unlockLocalKey();
 		      if (key.length > 0) {
 				if (have_passphrase) {
@@ -345,6 +409,14 @@ let g_counter = undefined;
 					passphrase_status = 'please unlock key';
 				}
 			}"
+>
+		<h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
+		<p x-show='isDev'>state <span x-text='lastState'></span></p>	
+		<div x-data="{
+			passphrase_cache: '',
+		     }"
+		     
+		      
 
 			x-show='!have_passphrase'>
 			<input name="pwd" type="password" x-model='passphrase_cache' x-bind:placeholder='passphrase_status' />
