@@ -1,5 +1,6 @@
 - 0.0.4
 	* settable passphrase for key encryption
+	* delete key function
 - 0.0.3
 	* add (optional) userid info for sender
 	* use funny names for default userid

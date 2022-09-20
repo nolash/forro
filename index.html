@@ -8,8 +8,8 @@ let g_passphrase_time = new Date(0);
 let g_remote_key = undefined;
 let g_local_key = undefined;
 let g_remote_key_id = '(none)';
-let g_local_key_id = '(none)';
 let g_remote_key_name = '?';
+let g_local_key_id = '(none)';
 let g_local_key_name = '?';
 let g_local_key_identified = false;
 let g_data_endpoint = window.location.href;
@@ -284,6 +284,19 @@ let g_counter = undefined;
 				return r;
 			}
 
+			function purgeLocalKey() {
+				key_id = g_local_key_id;
+				localStorage.removeItem('pgp-key');
+				localStorage.removeItem('msg-count');
+				g_local_key = undefined;
+				g_local_key_id = undefined;
+				g_local_key_identified = false;
+				g_passphrase = '';
+				g_passphrase_time = new Date(0);
+				stateChange('deleted local key ' + key_id);
+				return true;
+			}
+
 			window.addEventListener('messagestatechange', (v) => {
 				console.debug('message state change:', v.detail.s);
 			});
@@ -305,6 +318,7 @@ let g_counter = undefined;
 		realemail: '',
 		message_status: '',
 		message_count: g_counter,
+		passphrase_status: 'please create key',
 
 		}"
 >
@@ -312,7 +326,6 @@ let g_counter = undefined;
 		
 		<div x-data="{
 			passphrase_cache: '',
-			passphrase_status: 'please create key',
 		     }"
 		     
 		      x-init="
@@ -367,6 +380,12 @@ let g_counter = undefined;
 			<div>
 				<button @click="r = await tryDispatch(content, realname, realemail); rcpt = r;">sign, encrypt and send</button>
 			</div>
+		</div>
+		<div x-data="{
+			rst: false,
+		     }">
+			<button x-show='key && !rst' @click='rst = true;'>Discard key</button>
+			<button x-show='rst' @dblclick='rst = false; passphrase_status = "please create new key"; have_passphrase = false; key = !purgeLocalKey();'>Double click to confirm discard key</button>
 		</div>
 	</body>
 </html>
