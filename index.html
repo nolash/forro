@@ -477,6 +477,7 @@ div#helpdiv .old {
 					  x-show="USE_HELP"
 					  >
 				<template x-data="{
+					help_display_count: 3,
 					help_contents: [],
 					help_lastcount: 0,
 					help_cap: 8,
@@ -502,12 +503,12 @@ div#helpdiv .old {
 							return [];
 						}
 						let contents = [];
-						let c = (this.help_crsr - this.help_count + 1);
+						let c = (this.help_crsr - this.help_display_count + 1);
 						if (c < 0) {
-							c = this.help_count + c;
+							c = this.help_display_count + c;
 						}
-						new_threshold = this.help_count - this.help_lastcount;
-						for (let i = 0; i < this.help_count; i++) {
+						new_threshold = this.help_display_count - this.help_lastcount;
+						for (let i = 0; i < this.help_display_count; i++) {
 							c %= this.help_cap;
 							console.log('contents ', this.help_contents, contents, this.help_crsr, c);
 							is_old = i < new_threshold;
