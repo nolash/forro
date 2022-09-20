@@ -3,16 +3,17 @@
 		<script>
 const PUBKEY_PFX  = 'pgp.publickey';
 const STATE = {
-	PANIC: 1 << 0,
-	RTS:  1 << 1,
-	SEND_ERROR: 1 << 2,
-	SETTINGS: 1 << 3,
-	REMOTE_KEY: 1 << 4,
-	LOCAL_KEY: 1 << 8,
-	LOCAL_KEY_DECRYPTED: 1 << 9,
-	LOCAL_KEY_IDENTIFIED: 1 << 10,
-	PASSPHRASE_STORED: 1 << 12,
-	DEV: 1 << 31,
+	DEV: 1 << 0,
+	PANIC: 1 << 1,
+	RTS:  1 << 2,
+	SEND_ERROR: 1 << 3,
+	SETTINGS: 1 << 4,
+	REMOTE_KEY: 1 << 5,
+	LOCAL_KEY: 1 << 6,
+	LOCAL_KEY_DECRYPTED: 1 << 7,
+	LOCAL_KEY_IDENTIFIED: 1 << 8,
+	LOCAL_KEY_GENERATE: 1 << 9,
+	PASSPHRASE_STORED: 1 << 9,
 };
 const STATE_KEYS = Object.keys(STATE);
 
@@ -86,6 +87,7 @@ let g_counter = undefined;
 				let kl = k.toPacketList();
 				let klf = kl.filterByTag(openpgp.enums.packet.userID);
 				if (klf.length > 1) {
+					stateChange('local key has been identified', STATE["LOCAL_KEY_IDENTIFIED"]);
 					g_local_key_identified = true;
 				}
 				return klf[klf.length-1].name;
@@ -322,13 +324,13 @@ let g_counter = undefined;
 			};
 		
 			async function createLocalKey(pwd) {
-				stateChange('generate new local signing key');
+				stateChange('generate new local signing key', STATE["LOCAL_KEY_GENERATE"]);
 				const uid = {
 					name: generateName(),
 					email: 'foo@devnull.holbrook.no',
 				};
 				g_local_key = await generatePGPKey(pwd, uid);
-				console.debug('you will initially be called', uid.name);
+				stateChange('new local signing key named ' + uid.name, STATE["LOCAL_KEY"], STATE["LOCAL_KEY_GENERATE"]);
 			}
 
 			async function setPwd(pwd) {
@@ -364,7 +366,15 @@ let g_counter = undefined;
 				g_counter = 0;
 				g_passphrase = undefined;
 				g_passphrase_time = new Date(0);
-				stateChange('deleted local key ' + key_id);
+				const purgeResetStates =  [
+					STATE["LOCAL_KEY"],
+					STATE["LOCAL_KEY_DECRYPTED"],
+					STATE["LOCAL_KEY_IDENTIFIED"],
+					STATE["PASSPHRASE_STORED"],
+					STATE["RTS"],
+					STATE["SEND_ERROR"],
+				];
+				stateChange('deleted local key ' + key_id, undefined, purgeResetStates);
 				return true;
 			}
 
