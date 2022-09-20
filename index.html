@@ -14,6 +14,7 @@ const STATE = {
 	LOCAL_KEY_IDENTIFIED: 1 << 8,
 	LOCAL_KEY_GENERATE: 1 << 9,
 	PASSPHRASE_ACTIVE: 1 << 10,
+	PASSPHRASE_FAIL: 1 << 11,
 };
 const STATE_KEYS = Object.keys(STATE);
 
@@ -334,6 +335,7 @@ let g_counter = undefined;
 			}
 
 			async function setPwd(pwd) {
+				stateChange('attempt password set', undefined, STATE['PASSPHRASE_FAIL']);
 				if (!pwd) {
 					pwd = undefined;
 				}
@@ -345,15 +347,15 @@ let g_counter = undefined;
 				} else if (g_local_key === undefined) {
 					await createLocalKey(pwd);
 				}
-				let r = false;
-				console.log('rrr', r);
-				r = await unlockLocalKey(pwd);
-				if (r) {
-					applyLocalKey();
+				let r = await unlockLocalKey(pwd);
+				if (!r) {
+					stateChange('key unlock fail', STATE['PASSPHRASE_FAIL']);
+					return false;
 				}
 				if (pwd !== undefined) {
 					stateChange('passphrase validated', STATE['PASSPHRASE_ACTIVE']);
 				}
+				applyLocalKey();
 				g_passphrase = pwd;
 				g_passphrase_time = Date.now();
 				return r;
@@ -391,7 +393,7 @@ let g_counter = undefined;
 	</head>
 
 	<body x-data="{
-		have_passphrase: false,
+		have_key: false,
 		key: '',
 		rkey: '',
 		key_armor: undefined,
@@ -404,8 +406,6 @@ let g_counter = undefined;
 		message_count: g_counter,
 		passphrase_status: 'please create key',
 		last_state: 0,
-		last_state_string: '',
-		dev: false,
 
 		get haveSettings() {
 			return this.last_state & STATE['SETTINGS'] > 0;
@@ -421,18 +421,23 @@ let g_counter = undefined;
 
 		}"
 
-		x-on:messagestatechange.window="last_state = $event.detail.state; last_state_string = debugState(last_state);"
+		      x-init="unlockLocalKey();"
 
-		x-init="
-		      have_passphrase = await unlockLocalKey();
-		      if (key.length > 0) {
-				if (have_passphrase) {
-					applyLocalKey();
-				} else {
-					passphrase_status = 'please unlock key';
+		      @messagestatechange.window='
+			      last_state = $event.detail.state;
+				if (!have_key && checkState(STATE["LOCAL_KEY_DECRYPTED"])) {
+		      			have_key = true;
+					$dispatch("unlocked");
+			      }
+			      if (checkState(STATE["PASSPHRASE_FAIL"])) {
+					$dispatch("passfail");
 				}
-			}"
->
+				'
+
+		      @unlocked='applyLocalKey();'
+
+		      >
+
 		<h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
 		<hr/>
 		<div x-show='isDev'>
@@ -453,16 +458,27 @@ let g_counter = undefined;
 		     
 		      
 
-			x-show='!have_passphrase'>
-			<input name="pwd" type="password" x-model='passphrase_cache' x-bind:placeholder='passphrase_status' />
+			x-show='!have_key'>
+			<input name="pwd" type="password"
+				x-model='passphrase_cache'
+				x-bind:placeholder='passphrase_status'
+				@passfail.window='passphrase_status = "wrong_passphrase"; passphrase_cache = "";';
+					  >
 			<button x-data="{
-				go_label: 'go',
+					go_label: 'go',
 				}"
+
 				x-text='go_label'
-				@click='have_passphrase = await setPwd(passphrase_cache); if (!have_passphrase) { passphrase_status = "wrong passphrase";  go_label = "go again"; passphrase_cache = ""; };' ></button>
-			<button x-show='!key' @click='have_passphrase = true; await setPwd();' >without passphrase</button>
+
+				@passfail.window='go_label = "go again";'
+
+				@click='setPwd(passphrase_cache);'
+				></button>
+				
+
+			<button x-show='!key' @click='setPwd();' >without passphrase</button>
 		</div>
-		<div x-show='have_passphrase' x-init="await setUp();" x-data="{
+		<div x-show='have_key' x-init="await setUp();" x-data="{
 			rcpt: '',
 			content: '',
 			
