@@ -419,7 +419,12 @@ let g_counter = undefined;
 		<style type="text/css">
 div#helpdiv .old {
 	color: #aaa;
-};
+}
+h1 {
+	margin-block-end: 1em;
+	margin-block-start: 0.5em;
+	font-size: 2em;
+}
 		</style>
 	</head>
 
@@ -483,26 +488,35 @@ div#helpdiv .old {
 
 		      >
 
-		<h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
+		      <h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
+		      
 		<div > 
-			<div id="helpdiv" style="height: 7em;"
+			<div id="helpdiv" style="height: 6em;"
 					  x-show="isHelp"
 					  >
+			      <hr/>
 				<template x-data="{
-					help_display_count: 10,
+					help_cap: 128, // if set to 0 then no buffer
+					help_display_count: 5, // if help_cap is 0, ignore
 					help_contents: [],
 					help_lastcount: 0,
-					help_cap: 8,
 					help_count: 0,
 					help_crsr: -1,
 
 					addHelpContents(v) {
-						for (let i = 0; i < v.length; i++) {
-							this.help_crsr += 1;
-							this.help_crsr %= this.help_cap;
-							this.help_contents[this.help_crsr] = v[i];
-							if (this.help_count < this.help_cap) {
-								this.help_count += 1;
+						if (this.help_cap == 0) {
+							this.help_display_count = v.length;
+							this.help_count = v.length;
+							this.help_contents = v;
+							this.help_crsr = this.help_count - 1;
+						} else {
+							for (let i = 0; i < v.length; i++) {
+								this.help_crsr += 1;
+								this.help_crsr %= this.help_cap;
+								this.help_contents[this.help_crsr] = v[i];
+								if (this.help_count < this.help_cap) {
+									this.help_count += 1;
+								}
 							}
 						}
 						if (v.length > 0) {
@@ -511,6 +525,7 @@ div#helpdiv .old {
 					},
 
 					get helpContents() {
+						console.log('helpcount', this.help_crsr, this.help_count);
 						if (this.help_crsr < 0) {
 							return [];
 						}
@@ -521,6 +536,7 @@ div#helpdiv .old {
 							l = this.help_count;
 						}
 
+
 						let c = (this.help_crsr - l + 1);
 						if (c < 0) {
 							c = l + c;
@@ -528,7 +544,9 @@ div#helpdiv .old {
 						
 						new_threshold = l - this.help_lastcount;
 						for (let i = 0; i < l; i++) {
-							c %= this.help_cap;
+							if (this.help_cap > 0) {
+								c %= this.help_cap;
+							}
 							console.log('contents ', this.help_contents, contents, this.help_crsr, c);
 							is_old = i < new_threshold;
 							v = [this.help_contents[c], is_old ? 'old' : 'new'];
@@ -541,7 +559,7 @@ div#helpdiv .old {
 					x-init="tryHelpFor('welcome');"
 					x-for="(v) in helpContents"
 					@help.window="addHelpContents($event.detail.v);">
-					<p style="font-size: 0.5em; line-height: 0.4em;" x-html="v[0]" :class="v[1]" />
+					<p style="font-size: 0.8em; line-height: 0.3em;" x-html="v[0]" :class="v[1]" />
 				</template>
 			</div>
 		<hr/>
@@ -641,9 +659,9 @@ div#helpdiv .old {
 				<dd x-text="message_status" x-on:messagestatechange.window="defaultname = !g_local_key_identified;"></dd>
 
 				<dt>Your identity:</dt>
-				<dd><a x-text="keyDisplay" x-bind:href="localKeyArmor" x-bind:download="localKeyFilename"></a></dd>
+				<dd><a x-text="keyDisplay" title="Click to download your private key" x-bind:href="localKeyArmor" x-bind:download="localKeyFilename"></a></dd>
 				<dt>Their identity:</dt>
-				<dd><a x-text="rkeyDisplay" x-bind:href="remoteKeyArmor" x-bind:download="remoteKeyFilename"></a></dd>
+				<dd><a x-text="rkeyDisplay" title="Click to download the recipient's public key" x-bind:href="remoteKeyArmor" x-bind:download="remoteKeyFilename"></a></dd>
 				<dt>Message number:</dt>
 				<dd x-text="message_count"></dd>
 				<dt>Your receipt:<dt>
@@ -659,9 +677,12 @@ div#helpdiv .old {
 				<div x-show='defaultname'
 				     x-data='{
 					identify: false,
-				     }'>
-					<select @change='identify = true;'>
-						<option value=0>Stay anonymous</option>
+				     }'
+				     @rst.window='identify = false;'
+				     >
+				     <select id="identity_select" @change='identify = $event.target.value > 0; if (identify) { tryHelpFor("identify") };'
+						@rst.window='document.getElementById("identity_select").value=0;'>
+						<option value=0 defaultselected>Stay anonymous</option>
 						<option value=1>Identify yourself</option>
 					</select>
 					<div x-show="identify">

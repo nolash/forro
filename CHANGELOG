@@ -1,6 +1,8 @@
 - 0.0.4
 	* settable passphrase for key encryption
 	* delete key function
+	* buffered contextual help
+	* dedicated dev debug section
 - 0.0.3
 	* add (optional) userid info for sender
 	* use funny names for default userid
