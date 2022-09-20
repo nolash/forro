@@ -15,6 +15,8 @@ const STATE = {
 	LOCAL_KEY_GENERATE: 1 << 9,
 	PASSPHRASE_ACTIVE: 1 << 10,
 	PASSPHRASE_FAIL: 1 << 11,
+	ACK_MESSAGE: 1 << 12,
+	ACK_PUBKEY: 1 << 13,
 };
 const STATE_KEYS = Object.keys(STATE);
 
@@ -283,12 +285,15 @@ let g_counter = undefined;
 						'Authorization': 'PUBSIG ' + auth,
 					}
 				});
-				
+			
 				rcpt_remote = await res.text();
 				if (rcpt_remote.toLowerCase() != rcpt.toLowerCase()) {
 					throw "mutable ref mismatch between local and server; " + rcpt + " != " + rcpt_remote;
 				}
+				stateChange(rcpt, STATE['ACK_MESSAGE']);
+				stateChange('message submit complete', undefined, STATE['ACK_MESSAGE']);
 				g_counter += 1;
+
 				stateChange('update local state, next message is: ' + g_counter);
 				localStorage.setItem('msg-count', g_counter);
 
@@ -309,7 +314,6 @@ let g_counter = undefined;
 
 				const pubkey_auth = await generateAuth(g_local_key, envelope_pubkey);
 
-				stateChange('send publickey ' + g_local_key_id);
 				res = await fetch(g_data_endpoint + '/' + PUBKEY_PFX + g_remote_key.getFingerprint(), {
 					method: 'PUT',
 					body: enc_pubkey,
@@ -320,7 +324,9 @@ let g_counter = undefined;
 				});
 
 
-				stateChange('ready to send next message');
+				rcpt_pubkey = await res.text();
+				stateChange(rcpt_pubkey, STATE['ACK_PUBKEY']);
+				stateChange('publickey submit complete', undefined, STATE['ACK_PUBKEY']);
 				return rcpt;
 			};
 		
@@ -424,6 +430,10 @@ let g_counter = undefined;
 		      x-init="unlockLocalKey();"
 
 		      @messagestatechange.window='
+				message_status = $event.detail.s;
+				message_count = $event.detail.c;
+				key = $event.detail.kl;
+				rkey = $event.detail.kr; 
 			      last_state = $event.detail.state;
 				if (!have_key && checkState(STATE["LOCAL_KEY_DECRYPTED"])) {
 		      			have_key = true;
@@ -432,9 +442,14 @@ let g_counter = undefined;
 			      if (checkState(STATE["PASSPHRASE_FAIL"])) {
 					$dispatch("passfail");
 				}
+				if (checkState(STATE["ACK_MESSAGE"])) {
+				      $dispatch("rcpt", {v: $event.detail.s});
+				}
 				'
 
 		      @unlocked='applyLocalKey();'
+
+		      @rst.window='message_count = 0'
 
 		      >
 
@@ -463,6 +478,7 @@ let g_counter = undefined;
 				x-model='passphrase_cache'
 				x-bind:placeholder='passphrase_status'
 				@passfail.window='passphrase_status = "wrong_passphrase"; passphrase_cache = "";';
+				@rst.window='passphrase_status = "please create new key";' 
 					  >
 			<button x-data="{
 					go_label: 'go',
@@ -471,6 +487,7 @@ let g_counter = undefined;
 				x-text='go_label'
 
 				@passfail.window='go_label = "go again";'
+				@rst.window='go_label = "go";'
 
 				@click='setPwd(passphrase_cache);'
 				></button>
@@ -482,10 +499,12 @@ let g_counter = undefined;
 			rcpt: '',
 			content: '',
 			
-			}">
+			}"
+			@rcpt.window='rcpt = $event.detail.v;'
+			>
 			<dl>
 				<dt>Status:</dt>
-				<dd x-text="message_status" x-on:messagestatechange.window="message_status = $event.detail.s; message_count = $event.detail.c; key = $event.detail.kl; rkey = $event.detail.kr; if (key_armor === undefined && g_local_key !== undefined) { key_armor = g_local_key.armor(); }; if (rkey_armor === undefined && g_remote_key !== undefined) { rkey_armor = g_remote_key.armor(); }; defaultname = !g_local_key_identified;"></dd>
+				<dd x-text="message_status" x-on:messagestatechange.window="if (key_armor === undefined && g_local_key !== undefined) { key_armor = g_local_key.armor(); }; if (rkey_armor === undefined && g_remote_key !== undefined) { rkey_armor = g_remote_key.armor(); }; defaultname = !g_local_key_identified;"></dd>
 
 				<dt>Your identity:</dt>
 				<dd><a x-text="key" x-bind:href="'data:text/plain;charset=utf-8,' + key_armor" download="privatekey.asc"></a></dd>
@@ -514,14 +533,15 @@ let g_counter = undefined;
 				x-on:messagestatechange.window='ready = checkState(STATE["RTS"]);'
 					>
 				<button 
-					x-bind:disabled='!ready' @click="r = await tryDispatch(content, realname, realemail); rcpt = r;">sign, encrypt and send</button>
+					x-bind:disabled='!ready'
+					@click="tryDispatch(content, realname, realemail);">sign, encrypt and send</button>
 			</div>
 		</div>
 		<div x-data="{
 			rst: false,
 		     }">
 			<button x-show='key && !rst' @click='rst = true;'>Discard key</button>
-			<button x-show='rst' @dblclick='rst = false; passphrase_status = "please create new key"; have_passphrase = false; key = !purgeLocalKey(); message_count = 0;'>Double click to confirm discard key</button>
+			<button x-show='rst' @dblclick='$dispatch("rst"); key = !purgeLocalKey();'>Double click to confirm discard key</button>
 		</div>
 	</body>
 </html>
