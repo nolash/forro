@@ -13,7 +13,7 @@ const STATE = {
 	LOCAL_KEY_DECRYPTED: 1 << 7,
 	LOCAL_KEY_IDENTIFIED: 1 << 8,
 	LOCAL_KEY_GENERATE: 1 << 9,
-	PASSPHRASE_STORED: 1 << 9,
+	PASSPHRASE_ACTIVE: 1 << 10,
 };
 const STATE_KEYS = Object.keys(STATE);
 
@@ -351,6 +351,9 @@ let g_counter = undefined;
 				if (r) {
 					applyLocalKey();
 				}
+				if (pwd !== undefined) {
+					stateChange('passphrase validated', STATE['PASSPHRASE_ACTIVE']);
+				}
 				g_passphrase = pwd;
 				g_passphrase_time = Date.now();
 				return r;
@@ -431,7 +434,19 @@ let g_counter = undefined;
 			}"
 >
 		<h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
-		<p x-show='isDev'>state <span x-text='lastState'></span></p>	
+		<hr/>
+		<div x-show='isDev'>
+		<h2>State</h2>
+			<dl>
+				<dt>event</dt>
+				<dd x-text='message_status' />
+				<dt>state value</dt>
+				<dd x-text='last_state' />
+				<dt>state description</dt>
+				<dd x-text='lastState' />
+			</dl>
+		<hr/>
+		</div>
 		<div x-data="{
 			passphrase_cache: '',
 		     }"
