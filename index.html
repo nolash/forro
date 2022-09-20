@@ -60,7 +60,7 @@ let g_counter = undefined;
 					if (checkState(state, v)) {
 						const k = STATE_KEYS[i];
 						if (s.length > 0) {
-							s += ',';
+							s += ', ';
 						}
 						s += k;
 					}
@@ -170,27 +170,19 @@ let g_counter = undefined;
 					let state = parseInt(set_states[i]);
 					new_state = new_state & (0xffffffff & ~rst_states[i]);
 				}
-				let k_remote_str = '';
-				let k_local_str = '';
-				if (g_remote_key !== undefined) {
-					k_remote_str = g_remote_key_id + ' (' + g_remote_key_name + ')';
-				}
-				if (g_local_key !== undefined) {
-					k_local_str = g_local_key_id + ' (' + g_local_key_name + ')';
-				}
-
 				g_state = new_state;
 
 				const ev = new CustomEvent('messagestatechange', {
 					bubbles: true,
 					cancelable: false,
 					composed: true,
-					
 					detail: {
 						s: s,
 						c: g_counter,
-						kr: k_remote_str,
-						kl: k_local_str,
+						kr: g_remote_key_id,
+						nr: g_remote_key_name,
+						kl: g_local_key_id,
+						nl: g_local_key_name,
 						state: new_state,
 					},
 				});
@@ -399,18 +391,9 @@ let g_counter = undefined;
 	</head>
 
 	<body x-data="{
-		have_key: false,
-		key: '',
-		rkey: '',
-		key_armor: undefined,
-		rkey_armor: undefined,
-		defaultname: true,
-		identify: false,
-		realname: '',
-		realemail: '',
+		unlock_set: false,
 		message_status: '',
 		message_count: g_counter,
-		passphrase_status: 'please create key',
 		last_state: 0,
 
 		get haveSettings() {
@@ -425,6 +408,18 @@ let g_counter = undefined;
 			return debugState(this.last_state);
 		},
 
+		get haveKey() {
+			return checkState(this.last_state, STATE['LOCAL_KEY']);
+		},
+
+		get unlockedKey() {
+			return checkState(this.last_state, STATE['LOCAL_KEY_DECRYPTED']);
+		},
+
+		get haveRemoteKey() {
+			return checkState(this.last_state, STATE['REMOTE_KEY']);
+		},
+
 		}"
 
 		      x-init="unlockLocalKey();"
@@ -432,11 +427,9 @@ let g_counter = undefined;
 		      @messagestatechange.window='
 				message_status = $event.detail.s;
 				message_count = $event.detail.c;
-				key = $event.detail.kl;
-				rkey = $event.detail.kr; 
 			      last_state = $event.detail.state;
-				if (!have_key && checkState(STATE["LOCAL_KEY_DECRYPTED"])) {
-		      			have_key = true;
+				if (!unlock_set && checkState(STATE["LOCAL_KEY_DECRYPTED"])) {
+		      			unlock_set = true;
 					$dispatch("unlocked");
 			      }
 			      if (checkState(STATE["PASSPHRASE_FAIL"])) {
@@ -449,36 +442,32 @@ let g_counter = undefined;
 
 		      @unlocked='applyLocalKey();'
 
-		      @rst.window='message_count = 0'
+		      @rst.window='unlock_set = false; message_count = 0'
 
 		      >
 
 		<h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.4 (GPLv3)</a></h1>
+
 		<hr/>
-		<div x-show='isDev'>
-		<h2>State</h2>
-			<dl>
-				<dt>event</dt>
-				<dd x-text='message_status' />
-				<dt>state value</dt>
-				<dd x-text='last_state' />
-				<dt>state description</dt>
-				<dd x-text='lastState' />
-			</dl>
-		<hr/>
-		</div>
 		<div x-data="{
 			passphrase_cache: '',
+			passphrase_status: '',
+			passphrase_default_status: 'please create key',
+			get passphraseStatus() {
+				return this.passphrase_status ? this.passphrase_status : this.passphrase_default_status;
+			},
 		     }"
 		     
 		      
 
-			x-show='!have_key'>
+			x-show='!unlockedKey'
+			>
 			<input name="pwd" type="password"
 				x-model='passphrase_cache'
-				x-bind:placeholder='passphrase_status'
+				x-bind:placeholder='passphraseStatus'
 				@passfail.window='passphrase_status = "wrong_passphrase"; passphrase_cache = "";';
-				@rst.window='passphrase_status = "please create new key";' 
+				@messagestatechange.window='if (checkState(STATE["LOCAL_KEY"])) { passphrase_default_status = "please unlock key"; };'
+				@rst.window='console.log("passphrasestate"); passphrase_status = "please create new key";' 
 					  >
 			<button x-data="{
 					go_label: 'go',
@@ -493,23 +482,72 @@ let g_counter = undefined;
 				></button>
 				
 
-			<button x-show='!key' @click='setPwd();' >without passphrase</button>
+			<button x-show='!haveKey' @click='setPwd();' >without passphrase</button>
 		</div>
-		<div x-show='have_key' x-init="await setUp();" x-data="{
-			rcpt: '',
-			content: '',
-			
-			}"
+		<div x-show='unlockedKey'
+			x-init='setUp();'
+			x-data="{
+				rcpt: '',
+				content: '',
+				key: '',
+				rkey: '',
+				key_name: '',
+				rkey_name: '',
+				defaultname: true,
+				key_content: '',
+				rkey_content: '',
+				get localKeyArmor() {
+					return 'data:text/plain;charset=utf8,' + this.key_content;
+				},
+				get localKeyFilename() {
+					return 'privatekey_' + this.key + '.asc';
+				},
+				get remoteKeyArmor() {
+					return 'data:text/plain;charset=utf8,' + this.rkey_content;
+				},
+				get remoteKeyFilename() {
+					return 'publickey_' + this.rkey + '.asc';
+				},
+				get keyDisplay() {
+					if (!this.key) {
+						return '';
+					}
+					return this.key + ' (' + this.key_name + ')';
+				},
+				get rkeyDisplay() {
+					if (!this.rkey) {
+						return '';
+					}
+					return this.rkey + ' (' + this.rkey_name + ')';
+				},
+				}"
 			@rcpt.window='rcpt = $event.detail.v;'
-			>
+			@messagestatechange.window='
+				key = $event.detail.kl;
+				rkey = $event.detail.kr; 
+				key_name = $event.detail.nl;
+				rkey_name = $event.detail.nr;
+
+				if (checkState(STATE["LOCAL_KEY"])) {
+				      if (key_content == "") {
+					key_content = g_local_key.armor();
+				      }
+				}
+				if (checkState(STATE["REMOTE_KEY"])) {
+				      if (rkey_content == "") {
+					rkey_content = g_remote_key.armor();
+				      }
+				}
+			'
+		       >
 			<dl>
 				<dt>Status:</dt>
-				<dd x-text="message_status" x-on:messagestatechange.window="if (key_armor === undefined && g_local_key !== undefined) { key_armor = g_local_key.armor(); }; if (rkey_armor === undefined && g_remote_key !== undefined) { rkey_armor = g_remote_key.armor(); }; defaultname = !g_local_key_identified;"></dd>
+				<dd x-text="message_status" x-on:messagestatechange.window="defaultname = !g_local_key_identified;"></dd>
 
 				<dt>Your identity:</dt>
-				<dd><a x-text="key" x-bind:href="'data:text/plain;charset=utf-8,' + key_armor" download="privatekey.asc"></a></dd>
+				<dd><a x-text="keyDisplay" x-bind:href="localKeyArmor" x-bind:download="localKeyFilename"></a></dd>
 				<dt>Their identity:</dt>
-				<dd><a x-text="rkey" x-bind:href="'data:text/plain;charset=utf-8,' + rkey_armor" download="publickey.asc"></a></dd>
+				<dd><a x-text="rkeyDisplay" x-bind:href="remoteKeyArmor" x-bind:download="remoteKeyFilename"></a></dd>
 				<dt>Message number:</dt>
 				<dd x-text="message_count"></dd>
 				<dt>Your receipt:<dt>
@@ -518,30 +556,51 @@ let g_counter = undefined;
 			<textarea cols=72 rows=10 x-model="content" >
 			</textarea>
 			<br/>
-			<div x-show='defaultname'>
-				<select @change='identify = true;'>
-					<option value=0>Stay anonymous</option>
-					<option value=1>Identify yourself</option>
-				</select>
-				<div x-show="identify">
-					<input name="id_name" placeholder="name" x-model="realname" /> <input name="id_email" placeholder="email" x-model="realemail" />
+			<div x-data='{ 
+				realname: "",
+				realemail: "",
+					    }'>
+				<div x-show='defaultname'
+				     x-data='{
+					identify: false,
+				     }'>
+					<select @change='identify = true;'>
+						<option value=0>Stay anonymous</option>
+						<option value=1>Identify yourself</option>
+					</select>
+					<div x-show="identify">
+						<input name="id_name" placeholder="name" x-model="realname" /> <input name="id_email" placeholder="email" x-model="realemail" />
+					</div>
 				</div>
-			</div>
-			<div x-data="{
-					ready: false,
-					}"
-				x-on:messagestatechange.window='ready = checkState(STATE["RTS"]);'
-					>
-				<button 
-					x-bind:disabled='!ready'
-					@click="tryDispatch(content, realname, realemail);">sign, encrypt and send</button>
+				<div x-data="{
+						ready: false,
+						}"
+					x-on:messagestatechange.window='ready = checkState(STATE["RTS"]);'
+						>
+					<button 
+						x-bind:disabled='!ready'
+						@click="tryDispatch(content, realname, realemail);">sign, encrypt and send</button>
+				</div>
 			</div>
 		</div>
 		<div x-data="{
 			rst: false,
 		     }">
-			<button x-show='key && !rst' @click='rst = true;'>Discard key</button>
-			<button x-show='rst' @dblclick='$dispatch("rst"); key = !purgeLocalKey();'>Double click to confirm discard key</button>
+			<button x-show='haveKey && !rst' @click='rst = true;'>Discard key</button>
+			<button x-show='rst' @dblclick='rst = false; $dispatch("rst"); purgeLocalKey();'>Double click to confirm discard key</button>
+		</div>
+
+		<div x-show='isDev'>
+		<hr/>
+		<h2>Devmode details</h2>
+			<dl>
+				<dt>last event</dt>
+				<dd x-text='message_status' />
+				<dt>state value</dt>
+				<dd x-text='last_state' />
+				<dt>state description</dt>
+				<dd x-text='lastState' />
+			</dl>
 		</div>
 	</body>
 </html>
