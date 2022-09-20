@@ -525,7 +525,6 @@ h1 {
 					},
 
 					get helpContents() {
-						console.log('helpcount', this.help_crsr, this.help_count);
 						if (this.help_crsr < 0) {
 							return [];
 						}
@@ -547,7 +546,6 @@ h1 {
 							if (this.help_cap > 0) {
 								c %= this.help_cap;
 							}
-							console.log('contents ', this.help_contents, contents, this.help_crsr, c);
 							is_old = i < new_threshold;
 							v = [this.help_contents[c], is_old ? 'old' : 'new'];
 							contents.push(v); //this.help_contents[c]);
@@ -581,7 +579,7 @@ h1 {
 				x-bind:placeholder='passphraseStatus'
 				@passfail.window='passphrase_status = "wrong_passphrase"; passphrase_cache = "";';
 				@messagestatechange.window='if (checkState(STATE["LOCAL_KEY"])) { passphrase_default_status = "please unlock key"; };'
-				@rst.window='console.log("passphrasestate"); passphrase_status = "please create new key";' 
+				@rst.window='passphrase_status = "please create new key";' 
 					  >
 			<button x-data="{
 					go_label: 'go',

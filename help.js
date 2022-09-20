@@ -48,11 +48,9 @@ function help_identify(helpstate) {
 
 
 async function helpFor(helpstate, state, k) {
-	console.log('helpstate', helpstate);
 	let help = []
 
 	let fn = window['help_' + k];
-	console.log('fn is ', fn);
 	if (fn === undefined) {
 		console.warn("no help found for '" + k + "'");
 	} else {
