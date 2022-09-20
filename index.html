@@ -3,14 +3,16 @@
 		<script>
 const PUBKEY_PFX  = 'pgp.publickey';
 const STATE = {
-	DEV: 1,
-	PANIC: 2,
-	SETTINGS: 4,
-	REMOTE_KEY: 8,
-	LOCAL_KEY: 16,
-	LOCAL_KEY_DECRYPTED: 32,
-	PASSPHRASE_STORED: 64,
-	RTS: 128,
+	PANIC: 1 << 0,
+	RTS:  1 << 1,
+	SEND_ERROR: 1 << 2,
+	SETTINGS: 1 << 3,
+	REMOTE_KEY: 1 << 4,
+	LOCAL_KEY: 1 << 8,
+	LOCAL_KEY_DECRYPTED: 1 << 9,
+	LOCAL_KEY_IDENTIFIED: 1 << 10,
+	PASSPHRASE_STORED: 1 << 12,
+	DEV: 1 << 31,
 };
 const STATE_KEYS = Object.keys(STATE);
 
@@ -51,7 +53,7 @@ let g_counter = undefined;
 				let s = '';
 				for (let i = 0; i < STATE_KEYS.length; i++) {
 					const v = 1 << i;
-					if ((v & state)> 0) {
+					if (checkState(state, v)) {
 						const k = STATE_KEYS[i];
 						if (s.length > 0) {
 							s += ',';
@@ -60,6 +62,13 @@ let g_counter = undefined;
 					}
 				}
 				return s;
+			};
+			
+			function checkState(bit_check, bit_field) {
+				if (bit_field != 0 && !bit_field) {
+					bit_field = g_state;
+				}
+				return (bit_check & bit_field) > 0;
 			};
 
 			async function loadSettings() {
@@ -79,21 +88,19 @@ let g_counter = undefined;
 				if (klf.length > 1) {
 					g_local_key_identified = true;
 				}
-				console.log('klf', klf[0]);
 				return klf[klf.length-1].name;
 			}
 			
 			async function unlockLocalKey(pwd) {
+				let state = [];
 				try {
 					g_local_key = await getKey(pwd);
+					state.push(STATE['LOCAL_KEY']);
 				} catch(e) {
 					console.error(e);
 					stateChange('could not unlock key (passphrase: ' + pwd !== undefined + ')');
 					return false;
 				}
-
-				let state = [STATE['LOCAL_KEY']];
-
 				const decrypted = g_local_key.isDecrypted()
 				if (decrypted) {
 					state.push(STATE['LOCAL_KEY_DECRYPTED']);
@@ -114,8 +121,7 @@ let g_counter = undefined;
 				} else {
 					g_counter = parseInt(c);
 				}
-				stateChange('ready to send');
-
+				stateChange('ready to send', STATE['RTS']);
 			}
 
 			async function setUp() {
@@ -135,7 +141,7 @@ let g_counter = undefined;
 				g_remote_key_id = g_remote_key.getKeyID().toHex();
 				g_remote_key.getPrimaryUser().then((v) => {
 					g_remote_key_name = v.user.userID.name;
-					stateChange('loaded remote encryption key');
+					stateChange('loaded remote encryption key', STATE['REMOTE_KEY']);
 				});
 			}
 
@@ -155,9 +161,9 @@ let g_counter = undefined;
 					let state = parseInt(set_states[i]);
 					new_state |= state;
 				}
-				let new_rst_state = 0;
 				for (let i = 0; i < rst_states.length; i++) {
-					let state = state & (0xffffffff & ~rst.states);
+					let state = parseInt(set_states[i]);
+					new_state = new_state & (0xffffffff & ~rst_states[i]);
 				}
 				let k_remote_str = '';
 				let k_local_str = '';
@@ -187,14 +193,18 @@ let g_counter = undefined;
 			}
 
 			async function tryDispatch(s, name, email) {
+				stateChange('starting dispatch', undefined, [STATE['RTS'], STATE['SEND_ERROR']]);
+				let r = undefined;
 				try {
-					return await dispatch(s, name, email)
+					r = await dispatch(s, name, email)
 				} catch(e) {
 					console.error(e);
-					stateChange('send fail: ' + e);
-					return 'failed';
+					stateChange('send fail: ' + e, STATE['SEND_ERROR']);
+					r = 'failed';
 					// on fail the msg count will be wrong in error message
 				}
+				stateChange('ready to send again', STATE['RTS']);
+				return r;
 			}
 
 			function getPassphrase() {
@@ -322,7 +332,7 @@ let g_counter = undefined;
 			}
 
 			async function setPwd(pwd) {
-				if (pwd.length == 0) {
+				if (!pwd) {
 					pwd = undefined;
 				}
 				if (pwd === undefined) {
@@ -359,7 +369,7 @@ let g_counter = undefined;
 			}
 
 			window.addEventListener('messagestatechange', (v) => {
-				console.debug('message state change:', v.detail.s, v.detail.state);
+				console.debug('message state change:', v.detail.state, debugState(v.detail.state), v.detail.s);
 			});
 
 
@@ -457,8 +467,13 @@ let g_counter = undefined;
 					<input name="id_name" placeholder="name" x-model="realname" /> <input name="id_email" placeholder="email" x-model="realemail" />
 				</div>
 			</div>
-			<div>
-				<button @click="r = await tryDispatch(content, realname, realemail); rcpt = r;">sign, encrypt and send</button>
+			<div x-data="{
+					ready: false,
+					}"
+				x-on:messagestatechange.window='ready = checkState(STATE["RTS"]);'
+					>
+				<button 
+					x-bind:disabled='!ready' @click="r = await tryDispatch(content, realname, realemail); rcpt = r;">sign, encrypt and send</button>
 			</div>
 		</div>
 		<div x-data="{
