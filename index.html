@@ -263,41 +263,9 @@ let g_counter = undefined;
 					binary: msg_sig_inner,
 				});
 
-				const enckey_local = await g_local_key.getEncryptionKey();
-				const enckey_remote = await g_remote_key.getEncryptionKey();
+				let r_enc = await encryptMessage(msg_sig, pfx);
+				let rcpt = await dispatchMessage(r_enc, pfx);
 
-				const enc = await openpgp.encrypt({
-					encryptionKeys: [g_remote_key, g_local_key],
-					format: 'binary',
-					message: msg_sig,
-				});
-				
-				console.debug('encrypted for keys', enckey_local.getKeyID().toHex(), enckey_remote.getKeyID().toHex());
-
-				let envelope = await openpgp.createMessage({
-					binary: enc,
-				});
-				
-				stateChange('sign and encode message request ' + g_counter);
-				const auth = await generateAuth(g_local_key, envelope);
-
-				const rcpt = await generatePointer(g_local_key, pfx);
-				console.debug('digest for encrypted message:', rcpt);
-
-				stateChange('send message ' + g_counter);
-				let res = await fetch(g_data_endpoint + '/' + pfx, {
-					method: 'PUT',
-					body: enc,
-					headers: {
-						'Content-Type': 'application/octet-stream',
-						'Authorization': 'PUBSIG ' + auth,
-					}
-				});
-			
-				rcpt_remote = await res.text();
-				if (rcpt_remote.toLowerCase() != rcpt.toLowerCase()) {
-					throw "mutable ref mismatch between local and server; " + rcpt + " != " + rcpt_remote;
-				}
 				stateChange(rcpt, STATE['ACK_MESSAGE']);
 				stateChange('message submit complete', undefined, STATE['ACK_MESSAGE']);
 				g_counter += 1;
@@ -334,7 +302,52 @@ let g_counter = undefined;
 				stateChange(rcpt_pubkey, STATE['ACK_PUBKEY']);
 				stateChange('publickey submit complete', undefined, STATE['ACK_PUBKEY']);
 				return rcpt;
-			};
+			}
+
+			async function dispatchMessage(o, pfx) {
+				let res = await fetch(g_data_endpoint + '/' + pfx, {
+					method: 'PUT',
+					body: o.msg,
+					headers: {
+						'Content-Type': 'application/octet-stream',
+						'Authorization': 'PUBSIG ' + o.auth,
+					}
+				});
+			
+				rcpt_remote = await res.text();
+				if (rcpt_remote.toLowerCase() != o.rcpt.toLowerCase()) {
+					throw "mutable ref mismatch between local and server; " + o.rcpt + " != " + rcpt_remote;
+				}
+				return rcpt_remote;
+			}
+
+			async function encryptMessage(msg, pfx) {
+				const enckey_local = await g_local_key.getEncryptionKey();
+				const enckey_remote = await g_remote_key.getEncryptionKey();
+
+				const enc = await openpgp.encrypt({
+					encryptionKeys: [g_remote_key, g_local_key],
+					format: 'binary',
+					message: msg,
+				});
+				
+				console.debug('encrypted for keys', enckey_local.getKeyID().toHex(), enckey_remote.getKeyID().toHex());
+				let envelope = await openpgp.createMessage({
+					binary: enc,
+				});
+				
+				stateChange('sign and encode message request ' + g_counter);
+				const auth = await generateAuth(g_local_key, envelope);
+
+				const rcpt = await generatePointer(g_local_key, pfx);
+				console.debug('digest for encrypted message:', rcpt);
+				
+				return {
+					msg: enc,
+					rcpt: rcpt,
+					auth: auth,
+				};
+			}
 		
 			async function createLocalKey(pwd) {
 				stateChange('generate new local signing key', STATE["LOCAL_KEY_GENERATE"]);
