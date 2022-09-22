@@ -16,8 +16,10 @@ const STATE = {
 	PASSPHRASE_ACTIVE: 1 << 10,
 	PASSPHRASE_FAIL: 1 << 11,
 	ACK_MESSAGE: 1 << 12,
-	ACK_PUBKEY: 1 << 13,
-	HELP: 1 << 14,
+	ENC_MESSAGE: 1 << 13,
+	ACK_PUBKEY: 1 << 14,
+	ENC_PUBKEY: 1 << 15,
+	HELP: 1 << 16,
 };
 const STATE_KEYS = Object.keys(STATE);
 
@@ -55,6 +57,10 @@ let g_counter = undefined;
 		
 			function msg_identifier() {
 				return 'msg' + g_counter;
+			}
+
+			function pubkey_identifier() {
+				return PUBKEY_PFX + g_remote_key.getFingerprint();
 			}
 
 			function debugState(state) {
@@ -181,6 +187,7 @@ let g_counter = undefined;
 					let state = parseInt(set_states[i]);
 					new_state = new_state & (0xffffffff & ~rst_states[i]);
 				}
+				old_state = g_state;
 				g_state = new_state;
 
 				const ev = new CustomEvent('messagestatechange', {
@@ -194,6 +201,7 @@ let g_counter = undefined;
 						nr: g_remote_key_name,
 						kl: g_local_key_id,
 						nl: g_local_key_name,
+						old_state: old_state,
 						state: new_state,
 					},
 				});
@@ -239,17 +247,45 @@ let g_counter = undefined;
 				}
 
 				let pfx = msg_identifier();
+				let pfx_pub = pubkey_identifier(); 
 
 				stateChange('sign and encrypt message ' + g_counter);
 				const sha_raw = new jsSHA("SHA-256", "TEXT", { encoding: "UTF8" });
 				sha_raw.update(s);
 				const digest = sha_raw.getHash("HEX");
 				console.debug('digest for unencrypted message:', digest);
-	
-				const rcpt_public = await generatePointer(g_local_key, PUBKEY_PFX + g_remote_key.getFingerprint());
-				console.debug('digest for pubkey:', rcpt_public);
 
-				const payload = "msg id: " + pfx + "\npubkey link: " + g_data_endpoint + "/" + rcpt_public + "\n\n" + s;
+				// this is done twice, improve
+				const rcpt_pubkey_verify = await generatePointer(g_local_key, pfx);
+				const payload = "msg id: " + pfx + "\npubkey link: " + g_data_endpoint + "/" + rcpt_pubkey_verify + "\n\n" + s;
+			
+				const msg_sig = await signMessage(payload);
+				stateChange([g_counter, digest], STATE['SIG_MESSAGE']);
+
+				let r_enc = await encryptMessage(msg_sig, pfx);
+				stateChange([g_counter, digest, r_enc.rcpt], STATE['ENC_MESSAGE']);
+				let rcpt = await dispatchToEndpoint(r_enc, pfx);
+				stateChange([g_counter, rcpt], STATE['ACK_MESSAGE']);
+
+				g_counter += 1;
+
+				localStorage.setItem('msg-count', g_counter);
+
+				const r_enc_pub = await encryptPublicKey(g_local_key, pfx_pub);
+				stateChange([rcpt_pubkey_verify, r_enc_pub.rcpt], STATE['ENC_PUBKEY']);
+				let rcpt_pubkey = await dispatchToEndpoint(r_enc_pub, pfx_pub);
+				stateChange(rcpt_pubkey, STATE['ACK_PUBKEY']);
+
+				stateChange('dispatch complete. next message is ' + g_counter, undefined, [
+					STATE.ACK_MESSAGE,
+					STATE.ENC_MESSAGE,
+					STATE.ACK_PUBKEY,
+					STATE.ENC_PUBKEY,
+				]);
+				return rcpt;
+			}
+
+			async function signMessage(payload) {
 				const msg = await openpgp.createMessage({
 					text: payload,
 				});
@@ -262,36 +298,10 @@ let g_counter = undefined;
 				const msg_sig = await openpgp.createMessage({
 					binary: msg_sig_inner,
 				});
-
-				let r_enc = await encryptMessage(msg_sig, pfx);
-				let rcpt = await dispatchToEndpoint(r_enc, pfx);
-
-				stateChange(rcpt, STATE['ACK_MESSAGE']);
-				stateChange('message submit complete', undefined, STATE['ACK_MESSAGE']);
-				g_counter += 1;
-
-				localStorage.setItem('msg-count', g_counter);
-				stateChange('update local state, next message is: ' + g_counter);
-
-				const r_enc_pub = await encryptPublicKey(g_local_key);
-				let rcpt_pubkey = await dispatchToEndpoint(r_enc_pub, PUBKEY_PFX + g_remote_key.getFingerprint());
-//
-//				res = await fetch(g_data_endpoint + '/' + PUBKEY_PFX + g_remote_key.getFingerprint(), {
-//					method: 'PUT',
-//					body: enc_pubkey,
-//					headers: {
-//						'Content-Type': 'application/octet-stream',
-//						'Authorization': 'PUBSIG ' + pubkey_auth,
-//					}
-//				});
-
-//				rcpt_pubkey = await res.text();
-				stateChange(rcpt_pubkey, STATE['ACK_PUBKEY']);
-				stateChange('publickey submit complete', undefined, STATE['ACK_PUBKEY']);
-				return rcpt;
+				return msg_sig;
 			}
 
-			async function encryptPublicKey(k) {
+			async function encryptPublicKey(k, pfx) {
 				const pubkey_bin = g_local_key.toPublic().write();
 				const msg_pubkey = await openpgp.createMessage({
 					binary: pubkey_bin,
@@ -308,10 +318,12 @@ let g_counter = undefined;
 
 				const auth = await generateAuth(g_local_key, envelope_pubkey);
 
+				const rcpt_pubkey_verify = await generatePointer(g_local_key, pfx);
+
 				return {
 					msg: enc_pubkey,
 					auth: auth,
-					rcpt: null,
+					rcpt: rcpt_pubkey_verify,
 				};
 			}
 
@@ -352,7 +364,6 @@ let g_counter = undefined;
 					binary: enc,
 				});
 				
-				stateChange('sign and encode message request ' + g_counter);
 				const auth = await generateAuth(g_local_key, envelope);
 
 				const rcpt = await generatePointer(g_local_key, pfx);
@@ -442,7 +453,8 @@ let g_counter = undefined;
 			}
 
 			window.addEventListener('messagestatechange', (v) => {
-				console.debug('message state change:', v.detail.state, debugState(v.detail.state), v.detail.s);
+				state_change = (~v.detail.old_state) & v.detail.state;
+				console.debug('message state change:', [v.detail.s, v.detail.state, debugState(v.detail.state), state_change, debugState(state_change)]);
 			});
 
 
