@@ -1,0 +1,4 @@
+- 0.0.7
+	* UX to add multiple parts for payload, including images
+- 0.0.6
+	* Multipart payload
