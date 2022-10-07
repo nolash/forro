@@ -22,6 +22,8 @@ const STATE = {
 	ACK_COUNTER: 1 << 16,
 	ENC_COUNTER: 1 << 17,
 	HELP: 1 << 18,
+	FILE_PROCESS: 1 << 19,
+	FILE_ADDED: 1 << 20,
 };
 const STATE_KEYS = Object.keys(STATE);
 
@@ -39,6 +41,7 @@ let g_data_endpoint = window.location.href;
 let g_state = 0;
 let g_helpstate = 0;
 let g_counter = undefined;
+let g_files = {};
 
 		</script>
 		<script src="node_modules/openpgp/dist/openpgp.min.js"></script>
@@ -118,8 +121,7 @@ let g_counter = undefined;
 					g_local_key = await getKey(pwd);
 					state.push(STATE['LOCAL_KEY']);
 				} catch(e) {
-					console.error(e);
-					stateChange('could not unlock key (passphrase: ' + pwd !== undefined + ')');
+					stateChange('could not unlock key (passphrase: ' + (pwd !== undefined) + '). Reason: ' + e);
 					return false;
 				}
 				const decrypted = g_local_key.isDecrypted()
@@ -473,6 +475,25 @@ let g_counter = undefined;
 				return true;
 			}
 
+			async function fileChange(e) {
+				let fileButton = document.getElementById("fileAdder")
+				let file = fileButton.files[0];
+				stateChange('processing file: ' + file.name, STATE['FILE_PROCESS']);
+				if (file) {
+					let f = new FileReader();
+					f.onloadend = (r) => {
+						let contents = btoa(r.target.result);
+						const sha_raw = new jsSHA("SHA-256", "TEXT", { encoding: "UTF8" });
+						sha_raw.update(contents);
+						const digest = sha_raw.getHash("HEX");
+						g_files[digest] = contents;
+						stateChange([digest, file.name], STATE['FILE_ADDED'], STATE['FILE_PROCESS']);
+						stateChange('file added: ' + file.name + ' = ' + digest, undefined, STATE['FILE_ADDED']);
+					};
+					f.readAsBinaryString(file);
+				}
+			}
+
 			async function tryHelpFor(...k) {
 				//if (!checkState(STATE.HELP)) {
 				//	return;
@@ -751,9 +772,41 @@ h1 {
 				<dd x-text="message_count"></dd>
 				<dt>Your receipt:<dt>
 				<dd><a x-bind:href="g_data_endpoint + '/' + rcpt" x-text="rcpt"></a></dd>
-			</dl>
+				<dt>Add message:</dt>
+				<dd>
 			<textarea cols=72 rows=10 x-model="content" @focus="tryHelpFor('writemsg');">
 			</textarea>
+			</dd>
+				<dt>Add files:</dt>
+			<dd>
+			<input type="file" id="fileAdder"
+				@change="fileChange();"
+				   >
+			<ol>
+				<template x-data="{
+						  filez: {},
+
+						  addFileToList(k, v) {
+						  	this.filez[k] = v;
+						  },
+
+						  get fileList() {
+						  	let files = [];
+							for (const k in this.filez) {
+							  	files.push(this.filez[k] + ' (' + k.substring(0, 8) + ')');
+							  }
+							  return files;
+						  },
+						  
+					  };"
+					x-for="(v) in fileList"
+					@messagestatechange.window="if (checkState(STATE['FILE_ADDED'])) {addFileToList($event.detail.s[0], $event.detail.s[1]);}"
+					>
+					<li x-text="v"></li>
+				</template>
+			</ol>
+			</dd>
+			</dl>
 			<br/>
 			<div x-data='{ 
 				realname: "",
