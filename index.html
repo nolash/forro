@@ -1,5 +1,6 @@
 <html>
 	<head>
+		<title>Forro contact form</title>
 		<script>
 // drop-in replacement for the Base64 object used by the mime-js repo.
 var Base64 = {
@@ -70,6 +71,10 @@ var Base64 = {
 			return checkState(this.last_state, STATE['REMOTE_KEY']);
 		},
 
+		get getTitle() {
+			return 'forro v' + g_version;
+		},
+
 		}"
 
 		      x-init="unlockLocalKey();"
@@ -96,7 +101,9 @@ var Base64 = {
 
 		      >
 
-		      <h1><a href="https://git.defalsify.org/cgit/forro">forro v0.0.5 (GPLv3)</a></h1>
+		      <h1><a href="https://git.defalsify.org/cgit/forro"
+			     x-text="getTitle"></a>
+		      </h1>
 		      
 		<div id="app"> 
 			<div id="helpdiv" style="height: 6em;"
