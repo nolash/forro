@@ -2,3 +2,4 @@
 	* UX to add multiple parts for payload, including images
 - 0.0.6
 	* Multipart payload
+	* encrypt private key with password on export
