@@ -226,7 +226,7 @@ async function dispatch(s, name, email, files) {
 	});
 	let r_enc = await encryptMessage(msg, pfx);
 	stateChange([g_counter, digest, r_enc.rcpt], STATE['ENC_MESSAGE']);
-	let rcpt = await dispatchToEndpoint(r_enc, pfx);
+	let rcpt = await dispatchToEndpoint(r_enc, pfx, true);
 	stateChange([g_counter, rcpt], STATE['ACK_MESSAGE']);
 
 	let r_count = await encryptCounter(g_counter, pfx_count);
@@ -332,14 +332,19 @@ async function encryptPublicKey(k, pfx) {
 	};
 }
 
-async function dispatchToEndpoint(o, pfx) {
+async function dispatchToEndpoint(o, pfx, trace) {
+	let headers = {
+		'Content-Type': 'application/octet-stream',
+		'Authorization': 'PUBSIG ' + o.auth,
+	};
+
+	if (trace)
+		headers['X-Wala-Trace'] = '1';
+
 	let res = await fetch(g_data_endpoint + '/' + pfx, {
 		method: 'PUT',
 		body: o.msg,
-		headers: {
-			'Content-Type': 'application/octet-stream',
-			'Authorization': 'PUBSIG ' + o.auth,
-		}
+		headers: headers,
 	});
 
 	rcpt_remote = await res.text();
