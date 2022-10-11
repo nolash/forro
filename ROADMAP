@@ -1,5 +1,2 @@
 - 0.0.7
-	* UX to add multiple parts for payload, including images
-- 0.0.6
-	* Multipart payload
-	* encrypt private key with password on export
+	* Basic but usable responsive UX for vertical format
