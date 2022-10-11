@@ -488,7 +488,7 @@ async function buildMessage(message, files, pubkey) {
 		from: g_from,
 		to: g_remote_key_email,
 		subject: 'contact form message',
-		body: "Please see attachments",
+		body: message,
 		cids: [],
 		attaches: [],
 	};
