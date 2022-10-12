@@ -40,5 +40,5 @@ let g_state = 0;
 let g_helpstate = 0;
 let g_counter = undefined;
 let g_files = {};
-let g_version = '0.0.6';
+let g_version = '0.0.7';
 let g_from = 'no-reply@holbrook.no';

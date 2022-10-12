@@ -1,3 +1,5 @@
+- 0.0.7
+	* Replace btoa with base64.js from mime-js
 - 0.0.6
 	* Multipart payload
 	* encrypt private key with password on export
