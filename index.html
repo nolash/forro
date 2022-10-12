@@ -1,33 +1,10 @@
 <html>
 	<head>
 		<title>Forro contact form</title>
-		<script>
-// drop-in replacement for the Base64 object used by the mime-js repo.
-var Base64 = {
-	encode: (v, n) => {
-		console.debug("encode", v, n);
-		if (!v)
-			return "";
-		if (n)
-			v = new TextEncoder().encode(v);
-		r = new TextDecoder().decode(v);
-		return btoa(r);
-	},
-	decode: (v, n) => {
-		console.debug("decode", v, n);
-		if (!v)
-			return "";
-		r = atob(v);
-		if (n)
-			r = new TextDecoder().decode(r);
-		return r;
-	},
-}
-		</script>
-
 		<script defer src="node_modules/alpinejs/dist/cdn.min.js"></script>
 		<script src="node_modules/openpgp/dist/openpgp.min.js"></script>
 		<script src="node_modules/jssha/dist/sha256.js"></script>
+		<script src="node_modules/MimeJS/src/base64.js"></script>
 		<script src="node_modules/MimeJS/dist/mime-js.min.js"></script>
 		<script src="top.js"></script>
 		<script src="key.js"></script>
