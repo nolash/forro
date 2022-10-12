@@ -305,7 +305,13 @@ var Base64 = {
 				<dd><a x-bind:href="g_data_endpoint + '/' + rcpt" x-text="rcpt"></a></dd>
 				<dt>Add message:</dt>
 				<dd>
-			<textarea cols=72 rows=10 x-model="content" @focus="tryHelpFor('writemsg');">
+			<textarea 
+				cols=72
+				rows=10
+				x-model="content"
+				@focus="tryHelpFor('writemsg');"
+				@messagestatechange.window="if (checkState(STATE.ACK_MESSAGE)) {console.log('foo'); content = '';}"
+				>
 			</textarea>
 			</dd>
 			<dt>Add files:</dt>

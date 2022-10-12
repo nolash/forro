@@ -169,7 +169,7 @@ async function tryDispatch(s, name, email, files) {
 	let r = undefined;
 	try {
 		r = await dispatch(s, name, email, files)
-		stateChange('ready to send again', STATE['RTS']);
+		stateChange('successfully sent; ready to send again', STATE['RTS']);
 	} catch(e) {
 		console.error(e);
 		stateChange('send fail: ' + e, STATE['SEND_ERROR']);
