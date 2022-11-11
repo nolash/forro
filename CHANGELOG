@@ -1,3 +1,6 @@
+- 0.0.8
+	* Private key link returns encrypted armor key
+	* Override email sender and sender name through settings
 - 0.0.7
 	* Replace btoa with base64.js from mime-js
 - 0.0.6

@@ -106,6 +106,12 @@ async function setUp() {
 		g_data_endpoint = settings.data_endpoint;
 		stateChange('updated data endpoint to ' + settings.data_endpoint);
 	}
+	if (settings.email_sender) {
+		g_from = settings.email_sender;
+	}
+	if (settings.email_sender_name) {
+		g_from_name = settings.email_sender_name;
+	}
 
 	stateChange('loaded settings', STATE['SETTINGS']);
 	let r = await fetch(settings.remote_pubkey_url);
@@ -484,7 +490,7 @@ async function tryHelpFor(...k) {
 
 async function buildMessage(message, files, pubkey) {
 	let msg = {
-		fromName: 'Forro v' + g_version,
+		fromName: g_from_name,
 		from: g_from,
 		to: g_remote_key_email,
 		subject: 'contact form message',
@@ -511,6 +517,7 @@ async function buildMessage(message, files, pubkey) {
 	console.debug(msg_mime);
 	return msg_mime;
 }
+
 
 window.addEventListener('messagestatechange', (v) => {
 	state_change = (~v.detail.old_state) & v.detail.state;

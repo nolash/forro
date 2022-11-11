@@ -59,12 +59,12 @@
 		      @messagestatechange.window='
 				message_status = $event.detail.s;
 				message_count = $event.detail.c;
-			      last_state = $event.detail.state;
+				last_state = $event.detail.state;
 				if (!unlock_set && checkState(STATE["LOCAL_KEY_DECRYPTED"])) {
 		      			unlock_set = true;
 					$dispatch("unlocked");
-			      }
-			      if (checkState(STATE["PASSPHRASE_FAIL"])) {
+				}
+				if (checkState(STATE["PASSPHRASE_FAIL"])) {
 					$dispatch("passfail");
 				}
 				if (checkState(STATE["ACK_MESSAGE"])) {
@@ -204,7 +204,9 @@
 				filez: {},
 
 				get localKeyArmor() {
-					return 'data:text/plain;charset=utf8,' + this.key_content;
+					let k = getEncryptedKey();
+					//return 'data:text/plain;charset=utf8,' + this.key_content;
+					return 'data:text/plain;charset=utf8,' + k;
 				},
 				get localKeyFilename() {
 					return 'privatekey_' + this.key + '.asc';

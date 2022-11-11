@@ -26,12 +26,15 @@ async function generatePGPKey(pwd, uid) {
 	});
 }
 
-async function getKey(pwd) {
+async function getKey(pwd, encrypted) {
 	return new Promise(async (whohoo, doh) => {
 		let pk_armor = localStorage.getItem('pgp-key');
 		if (pk_armor === null) {
 			doh('no key');
 			return;
+		}
+		if (encrypted) {
+			return whohoo(pk_armor);
 		}
 		let pk = await openpgp.readKey({
 			armoredKey: pk_armor,
@@ -51,6 +54,10 @@ async function getKey(pwd) {
 			whohoo(pk);
 		}
 	});
+}
+
+function getEncryptedKey() {
+	return localStorage.getItem('pgp-key');
 }
 
 async function generateAuth(pk, msg) {
