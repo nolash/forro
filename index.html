@@ -204,9 +204,7 @@
 				filez: {},
 
 				get localKeyArmor() {
-					let k = getEncryptedKey();
-					//return 'data:text/plain;charset=utf8,' + this.key_content;
-					return 'data:text/plain;charset=utf8,' + k;
+					return 'data:text/plain;charset=utf8,' + this.key_content;
 				},
 				get localKeyFilename() {
 					return 'privatekey_' + this.key + '.asc';
@@ -255,7 +253,7 @@
 				rkey_name = $event.detail.nr;
 
 				if (checkState(STATE["LOCAL_KEY"])) {
-					if (key_content == "") {
+					if (key_content == "" | key_content == null) {
 						key_content = g_local_key.armor();
 					}
 				}
@@ -268,8 +266,7 @@
 					purgeFiles();
 					document.getElementById("fileAdder").value="";
 				}
-			'
-		       >
+		       '>
 			<dl>
 				<dt>Status:</dt>
 				<dd x-text="message_status" x-on:messagestatechange.window="defaultname = !g_local_key_identified;"></dd>
