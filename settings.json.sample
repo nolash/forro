@@ -1,4 +1,8 @@
 {
 	"remote_pubkey_url": "publickey.asc",
-	"data_endpoint": "http://localhost:8001"
+	"data_endpoint": "http://localhost:8001",
+	"help": true,
+	"dev": true,
+	"email_sender": "no-reply@devnull.org",
+	"email_sender_name": "Your Forro form"
 }
