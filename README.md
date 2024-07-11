@@ -7,6 +7,18 @@ It is written in pure javascript using the [alpinejs](https://alpinejs.dev/) fra
 It uses [PGP (openpgpjs)](https://openpgpjs.org/) for signatures and encryption.
 
 
+## Install
+
+* `nvm install 18.8`
+* `nvm use 18.8`
+* `npm install`
+
+
+## Dependencies
+
+* [wala-rust](https://defalsify.org/git/wala-rust/) `v0.1.7`
+
+
 ## User interface
 
 The application consists of only two pages.
