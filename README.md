@@ -14,6 +14,11 @@ It uses [PGP (openpgpjs)](https://openpgpjs.org/) for signatures and encryption.
 * `npm install`
 
 
+## Run
+
+Simple serve the repository root directory with a web server, e.g. [webfsd](https://github.com/ourway/webfsd)
+
+
 ## Dependencies
 
 * [wala-rust](https://defalsify.org/git/wala-rust/) `v0.1.7`
