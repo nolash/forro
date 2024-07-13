@@ -1,3 +1,17 @@
+/**
+ * Create a new PGP key from parameters
+ *
+ * On successful creation, the private key will be stored to local storage.
+ * 
+ * The private key stored in local storage will be always encrypted with the
+ * literal passphrase. The passphrase may be an empty string.
+ *
+ * @param {string} pwd Passphrase
+ * @param {Object} uid User id  object {name, email}
+ * @returns {Promise<Object>} Returns a private key object on 
+ * @todo enable some level of pwd integrity check
+ * @todo handle failure
+ */
 async function generatePGPKey(pwd, uid) {
 	if (uid === undefined) {
 		uid = {
@@ -26,6 +40,16 @@ async function generatePGPKey(pwd, uid) {
 	});
 }
 
+/**
+ * Retrieve the private key of the locally stored private key.
+ *
+ * @param {string} pwd Passphrase to decrypt the private key with.
+ * @param {boolean} encrypted If false, return the verbatim key data stored in
+ * local storage
+ * @returns {any} openpgpjs private key object if encrypted. Private key literal data if not.
+ * @todo Make return type same type
+ * @todo handle failure
+ */
 async function getKey(pwd, encrypted) {
 	return new Promise(async (whohoo, doh) => {
 		let pk_armor = localStorage.getItem('pgp-key');
@@ -56,10 +80,27 @@ async function getKey(pwd, encrypted) {
 	});
 }
 
+/**
+ * Retrieve the current ciphertext value of the private key in local store.
+ * @returns {string} Private key ASCII-armored PGP data
+ */
 function getEncryptedKey() {
 	return localStorage.getItem('pgp-key');
 }
 
+/**
+ * Create a HTTP Authorization PUBSIG string from the private key and provided message
+ * to use for remote submission.
+ *
+ * @param {Object} pk Private key
+ * @param {Object} msg Authenticated message object, containing msg, rcpt auth
+ * @returns {string} PUBSIG string
+ * @see encryptMessage
+ * @see encryptPublicKey
+ * @see encryptCounter
+ * @todo define an interface for the message object
+ *
+ */
 async function generateAuth(pk, msg) {
 	let sig = await openpgp.sign({
 		signingKeys: g_local_key,
@@ -77,6 +118,13 @@ async function generateAuth(pk, msg) {
 	return "pgp:" + pub_b + ":" + sig_b;
 }
 
+/**
+ * Create a mutable pointer for remote storage
+ *
+ * @param {Object} openpgpjs private key object
+ * @param {string} remote mutable storage prefix
+ * @returns {string} Mutable pointer in hex
+ **/
 async function generatePointer(pk, pfx) {
 	let sha = new jsSHA("SHA-256", "TEXT");
 	sha.update(pfx);
@@ -89,7 +137,15 @@ async function generatePointer(pk, pfx) {
 	return sha.getHash("HEX");
 }
 
-// robbed from https://www.w3resource.com/javascript/form/email-validation.php
+/**
+ * Validate email value
+ *
+ * robbed from https://www.w3resource.com/javascript/form/email-validation.php
+ *
+ * @param {string} mail Email to validate
+ * @returns {boolean} true if valid email string
+ *
+ **/
 function validateEmail(mail) {
 	if (/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(mail)) {
 		return true;
@@ -97,6 +153,20 @@ function validateEmail(mail) {
 	return false;
 }
 
+/**
+ * Add local store association between local private key and 
+ * identifiable information.
+ *
+ * (This is a bit of a hack, as openpgpjs (or pgp in general) does not seem
+ * designed for changing userid after the fact)
+ *
+ * @param {Object} pk openpgpjs Private key object
+ * @param {string} name Name of key owner (claimed)
+ * @param {string} email Email of key owner (claimed)
+ * @param {string} pwd Private key passphrase
+ * @returns {Promise<Object>} Updated private key object
+ * @todo handle failure
+ */
 async function identify(pk, name, email, pwd) {
 	return new Promise(async (whohoo, doh) => {
 		const u = openpgp.UserIDPacket.fromObject({

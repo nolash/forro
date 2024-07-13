@@ -1,4 +1,30 @@
+/** prefix for publickey record in remote mutable storage **/
 const PUBKEY_PFX  = 'pgp.publickey';
+/**
+ * Bitflag state which tracks all possible states across the application lifetime
+ *
+ * @prop {number} DEV Application is running in developer mode
+ * @prop {number} PANIC Application has panicked i.e. terminated abnormally
+ * @prop {number} RTS Application is ready to submit content to the backend
+ * @prop {number} SEND_ERROR Last attempt at sending content to the backend failed
+ * @prop {number} SETTINGS Settings have been successfully loaded
+ * @prop {number} REMOTE_KEY Remote encryption key has been successfully loaded
+ * @prop {number} LOCAL_KEY Local private key exists in store
+ * @prop {number} LOCAL_KEY_DECRYPTED Local private key has been decrypted and currently resides in memory
+ * @prop {number} LOCAL_KEY_IDENTIFIED User has provided some identifiable information for the private key (there is no guarantee this is real or not, of course)
+ * @prop {number} LOCAL_KEY_GENERATE A new local private key has been generated this session
+ * @prop {number} PASSPHRASE_ACTIVE User has provided a passphrase to unlock the local key
+ * @prop {number} PASSPHRASE_FAIL Last provided passphrase by user failed to unlock the local key
+ * @prop {number} ACK_MESSAGE Data endpoint has confirmed receipt of message
+ * @prop {number} ENC_MESSAGE Message was successfully encrypted locally (and is ready to be sent to remote)
+ * @prop {number} ACK_PUBKEY Data endpoint has confirmed receipt of public key data for local key
+ * @prop {number} ENC_PUBKEY Local key publickey was successfully encrypted locally (and is ready to be sent to remote)
+ * @prop {number} ACK_COUNTER Data endpoint has confirmed receipt of updated message counter 
+ * @prop {number} ENC_COUNTER Message counter was successfully encrypted locally (and is ready to be sent to remote)
+ * @prop {number} HELP Application is providing contextual help
+ * @prop {number} FILE_PROCESS A request to attach a file to the message has been initiated.
+ * @prop {number} FILE_ADDED A request to attach a file has been successfully processed. Submission will now contain the file content as part of the message.
+ **/
 const STATE = {
 	DEV: 1 << 0,
 	PANIC: 1 << 1,

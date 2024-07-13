@@ -1,23 +1,38 @@
-// Thanks to:
-// https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
-function buf2hex(buffer) { // buffer is an ArrayBuffer
+/**
+ * Buffer to hex encoder
+ *
+ * Thanks to: https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
+ *
+ * @param {object} ArrayBuffer with binary data
+ * @returns {string} hex
+ */
+function buf2hex(buffer) {
 	  return [...new Uint8Array(buffer)]
 	      .map(x => x.toString(16).padStart(2, '0'))
 	      .join('');
 }
 
+/** generate the mutable prefix for the message based on its sequence number **/ 
 function msg_identifier() {
 	return 'msg' + g_counter;
 }
 
+/** generate the mutable prefix for the public key **/
 function pubkey_identifier() {
 	return PUBKEY_PFX + g_remote_key.getFingerprint();
 }
 
+/** generate the mutable counter prefix for the message sequence number **/
 function counter_identifier() {
 	return 'msgidx';
 }
 
+/**
+ * output a humane representation of the given state
+ *
+ * @param {number} state
+ * @returns {string} description strings for each individual state bit set
+ */
 function debugState(state) {
 	let s = '';
 	for (let i = 0; i < STATE_KEYS.length; i++) {
@@ -33,6 +48,12 @@ function debugState(state) {
 	return s;
 };
 
+/**
+ * check if state bit needle is set in the given state bit haystack
+ * @param {number} needle 
+ * @param {number} haystack
+ * @returns {boolean}
+ */
 function checkState(bit_check, bit_field) {
 	if (bit_field != 0 && !bit_field) {
 		bit_field = g_state;
@@ -40,6 +61,9 @@ function checkState(bit_check, bit_field) {
 	return (bit_check & bit_field) > 0;
 };
 
+/**
+ * Retrieve settings from remote and parse them
+ */
 async function loadSettings() {
 	let rs = await fetch(window.location.href + '/settings.json', {
 		method: 'GET',
@@ -51,6 +75,14 @@ async function loadSettings() {
 	return await rs.json();
 }
 
+/**
+ * Get identifiable personal name from the GPG key packetlist
+ *
+ * Alters application state
+ *
+ * @param {object} pgp key object
+ * @returns {string} name
+ */
 function getEffectiveName(k) {
 	let kl = k.toPacketList();
 	let klf = kl.filterByTag(openpgp.enums.packet.userID);
@@ -61,6 +93,14 @@ function getEffectiveName(k) {
 	return klf[klf.length-1].name;
 }
 
+/**
+ * Unlock private key in storage with given passphrase
+ *
+ * Alters application state
+ *
+ * @param {string} passphrase
+ * @returns {boolean} true if successfully decrypted.
+ */
 async function unlockLocalKey(pwd) {
 	let state = [];
 	try {
@@ -79,6 +119,15 @@ async function unlockLocalKey(pwd) {
 	return decrypted;
 }
 
+/**
+ * Process current messaging state of local key.
+ * 
+ * Currently this is limited to looking up local storage record of message counter
+ *
+ * Alters application state
+ *
+ * @todo should retrieve state from remote if it is missing in local storage
+ */
 async function applyLocalKey() {
 	g_local_key_id = g_local_key.getKeyID().toHex();
 	g_local_key_name = getEffectiveName(g_local_key);
@@ -93,6 +142,9 @@ async function applyLocalKey() {
 	stateChange('ready to send', STATE['RTS']);
 }
 
+/**
+ * Application entry point
+ */
 async function setUp() {
 	let settings = await loadSettings();
 	if (settings.dev) {
@@ -128,6 +180,20 @@ async function setUp() {
 	});
 }
 
+/**
+ * Modify provided state.
+ *
+ * After this method complets, the global application state will be adjusted by
+ * bits specified to be added or removed.
+ *
+ * An event will be emitted for the state change.
+ *
+ * @param {number} s Arbitrary object relevant to the state change
+ * @param {number} set_states State bits to set
+ * @param {number} set_states State bits to reset
+ * @fires window.messagestatechange
+ * @todo make sure this method cannot fail
+ */
 async function stateChange(s, set_states, rst_states) {
 	if (!set_states) {
 		set_states = [];
@@ -169,6 +235,18 @@ async function stateChange(s, set_states, rst_states) {
 	window.dispatchEvent(ev);
 }
 
+/**
+ * Wrapper to set state accordingly if content submission fails.
+ *
+ * Will change application state.
+ *
+ * @param {string} s Text message from contact form
+ * @param {string} name Name of sender (claimed)
+ * @param {string} email Email of sender (claimed)
+ * @param {Object[]} files File attachments
+ * @returns {string} Remote identifier if succeeds, or "failed" if not.
+ * @see dispatch
+ */
 async function tryDispatch(s, name, email, files) {
 	stateChange('starting dispatch', undefined, [STATE['RTS'], STATE['SEND_ERROR']]);
 	console.debug('files', Object.keys(files));
@@ -184,10 +262,25 @@ async function tryDispatch(s, name, email, files) {
 	return r;
 }
 
+/**
+ * Getter for current passphrase in memory
+ *
+ * @todo passphrase should be deleted from memory when not used
+ *
+ **/
 function getPassphrase() {
 	return g_passphrase;
 }
 
+/**
+ * Attempt to replace the current user id packet in the PGP key structure, and handle error if unsuccessful.
+ *
+ * Will change application state.
+ *
+ * @param {string} name Name replacement
+ * @param {string} email Email replacement
+ *
+ */
 async function tryIdentify(name, email) {
 	if (g_local_key_identified) {
 		return false;
@@ -199,6 +292,32 @@ async function tryIdentify(name, email) {
 	g_local_key_identified = true;
 }
 
+/**
+ * Send content to remote
+ *
+ * This is a high level function which orchestrates the following actions:
+ *
+ * 1. Apply any available identifiable information to the local public key before submission
+ * 2. Create MIME multipart message from the submission
+ * 3. Sign the message with our local private key
+ * 4. Submit the message using our local public key and counter state as mutable pointer to remote
+ * 5. Submit the counter state to remote
+ * 6. Update local state
+ *
+ * Will make following changes to remote:
+ *
+ * 1. Submit message using public key as mutable identifier
+ * 2. Submit counter
+ *
+ * Will change application state
+ *
+ * @param {string} s Text message from contact form
+ * @param {string} name Name of sender (claimed)
+ * @param {string} email Email of sender (claimed)
+ * @param {Object[]} files File attachments
+ * @returns {string} remote identifier for the content
+ *
+ */
 async function dispatch(s, name, email, files) {
 	if (name) {
 		if (!validateEmail(email)) {
@@ -270,6 +389,12 @@ async function dispatch(s, name, email, files) {
 	return rcpt;
 }
 
+/**
+ * Sign provided content with local private key and return the detached signature.
+ *
+ * @param {string} Payload to sign
+ * @returns {Object} openpgpjs Signed message data
+ */
 async function signMessage(payload) {
 	const msg = await openpgp.createMessage({
 		text: payload,
@@ -286,6 +411,14 @@ async function signMessage(payload) {
 	return msg_sig;
 }
 
+/**
+ * Encrypt the counter data with the local public key to be stored
+ * at the remote endpoint.
+ *
+ * @param {number} c Current counter value
+ * @param {string} pfx Prefix to use for the remote pointer
+ * @returns {Object} msg: Encrypted counter message, to be submitted to endpoint; auth: Remote identifier to resolve mutable data pointer; rcpt: Signature material to use for HTTP Authorization PUBSIG
+ */
 async function encryptCounter(c, pfx) {
 	const msg_count = await openpgp.createMessage({
 		text: '' + g_counter,
@@ -312,6 +445,15 @@ async function encryptCounter(c, pfx) {
 
 }
 
+/**
+ * Encrypt the public key data with the local public key to be stored
+ * at the remote endpoint.
+ *
+ * @param {number} k Public key data
+ * @param {string} pfx Prefix to use for the remote pointer
+ * @returns {Object} msg: Encrypted pubkey message, to be submitted to endpoint; auth: Remote identifier to resolve mutable data pointer; rcpt: Signature material to use for HTTP Authorization PUBSIG
+ * @todo k param is not being used, global local key is the key being modified
+ */
 async function encryptPublicKey(k, pfx) {
 	const pubkey_bin = g_local_key.toPublic().write();
 	const msg_pubkey = await openpgp.createMessage({
@@ -338,6 +480,16 @@ async function encryptPublicKey(k, pfx) {
 	};
 }
 
+/**
+ * Low-level send to endpoint function
+ *
+ * @param {Object} o Encrypted content object
+ * @param {string} pfx Prefix to store data under 
+ * @param {boolean} trace Generate trace information, if available
+ * @throws Generic error if submission failed
+ * @returns {string} Remote identifier
+ *
+ */
 async function dispatchToEndpoint(o, pfx, trace) {
 	let headers = {
 		'Content-Type': 'application/octet-stream',
@@ -365,6 +517,15 @@ async function dispatchToEndpoint(o, pfx, trace) {
 	return rcpt_remote;
 }
 
+/**
+ * Encrypt the message data with the local public key to be stored
+ * at the remote endpoint.
+ *
+ * @param {number} k Public key data
+ * @param {string} pfx Prefix to use for the remote pointer
+ * @returns {Object} msg: Encrypted message, to be submitted to endpoint; auth: Remote identifier to resolve mutable data pointer; rcpt: Signature material to use for HTTP Authorization PUBSIG
+ * @todo k param is not being used, global local key is the key being modified
+ */
 async function encryptMessage(msg, pfx) {
 	const enckey_local = await g_local_key.getEncryptionKey();
 	const enckey_remote = await g_remote_key.getEncryptionKey();
@@ -393,6 +554,13 @@ async function encryptMessage(msg, pfx) {
 	};
 }
 
+/**
+ * Create a new local private key
+ *
+ * Will change application state
+ *
+ * @param {string} pwd Passphrase to encrypt key with
+ */
 async function createLocalKey(pwd) {
 	stateChange('generate new local signing key', STATE["LOCAL_KEY_GENERATE"]);
 	const uid = {
@@ -403,6 +571,17 @@ async function createLocalKey(pwd) {
 	stateChange('new local signing key named ' + uid.name, STATE["LOCAL_KEY"], STATE["LOCAL_KEY_GENERATE"]);
 }
 
+/**
+ * Unlock an existing private key with passphrase
+ *
+ * Will change application state
+ *
+ * @param {string} pwd Passphrase to decrypt key with
+ * @returns {boolean} true if unlocked
+ *
+ * @todo should be more intuitiviely named method
+ *
+ */
 async function setPwd(pwd) {
 	stateChange('attempt password set', undefined, STATE['PASSPHRASE_FAIL']);
 	if (!pwd) {
@@ -430,6 +609,11 @@ async function setPwd(pwd) {
 	return r;
 }
 
+/**
+ * Remove local key and related state from local storage
+ *
+ * Will change application state
+ */
 function purgeLocalKey() {
 	key_id = g_local_key_id;
 	localStorage.removeItem('pgp-key');
@@ -452,7 +636,15 @@ function purgeLocalKey() {
 	return true;
 }
 
-async function fileChange(e) {
+
+/**
+ * Handle file attachment request
+ *
+ * Will change application state.
+ *
+ * @todo currently no way exists to tell whether this has failed
+ */
+async function fileChange() {
 	let fileButton = document.getElementById("fileAdder")
 	let file = fileButton.files[0];
 	stateChange('processing file: ' + file.name, STATE.FILE_PROCESS);
@@ -471,6 +663,13 @@ async function fileChange(e) {
 	}
 }
 
+/**
+ * If interactive help is enabled, update the help text area with the current relevant
+ * contextual help strings
+ *
+ * @param {string[]} k Zero or more help identifiers to display, in sequence
+ * @fires window.help
+ */
 async function tryHelpFor(...k) {
 	//if (!checkState(STATE.HELP)) {
 	//	return;
@@ -488,6 +687,21 @@ async function tryHelpFor(...k) {
 	window.dispatchEvent(ev);
 }
 
+/**
+ * Create the message to be submitted from form input.
+ *
+ * The message is a MIME multipart message containing the following parts:
+ *
+ * * The composite message of the message text field and all attachments
+ * * The ASCII-armored public key used for the PGP signature
+ *
+ * This message will in turn be signed by the private key  matching the public key
+ * that was embedded
+ * 
+ * @param {string} message Message string
+ * @param {string} files Individual files to include
+ * @returns {string} MIME Multipart message text containing all parts of the message
+ */
 async function buildMessage(message, files, pubkey) {
 	let msg = {
 		fromName: g_from_name,
@@ -519,6 +733,11 @@ async function buildMessage(message, files, pubkey) {
 }
 
 
+/**
+ * Execute global state change and make sure each is logged
+ *
+ * @todo turn off log for release version
+ **/
 window.addEventListener('messagestatechange', (v) => {
 	state_change = (~v.detail.old_state) & v.detail.state;
 	let s = v.detail.s;

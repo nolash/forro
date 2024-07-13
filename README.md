@@ -7,6 +7,11 @@ It is written in pure javascript using the [alpinejs](https://alpinejs.dev/) fra
 It uses [PGP (openpgpjs)](https://openpgpjs.org/) for signatures and encryption.
 
 
+## Dependencies
+
+* [wala-rust](https://defalsify.org/git/wala-rust/) `v0.1.7` (see `Backend` below)
+
+
 ## Install
 
 * `nvm install 18.8`
@@ -17,11 +22,6 @@ It uses [PGP (openpgpjs)](https://openpgpjs.org/) for signatures and encryption.
 ## Run
 
 Simple serve the repository root directory with a web server, e.g. [webfsd](https://github.com/ourway/webfsd)
-
-
-## Dependencies
-
-* [wala-rust](https://defalsify.org/git/wala-rust/) `v0.1.7`
 
 
 ## User interface

@@ -19,6 +19,7 @@ let name_parts = [
 	"brains", "wit", "juice", "shower"],
 ];
 
+/** create a new random name from the parts in name_parts **/
 function generateName() {
 	name = '';
 	for (let i = 0; i < name_parts.length; i++) {
