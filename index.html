@@ -1,6 +1,8 @@
 <html>
 	<head>
 		<title>Forro contact form</title>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<script defer src="node_modules/alpinejs/dist/cdn.min.js"></script>
 		<script src="node_modules/openpgp/dist/openpgp.min.js"></script>
 		<script src="node_modules/jssha/dist/sha256.js"></script>
@@ -14,7 +16,9 @@
 		<link rel="stylesheet" type="text/css" href="style.css"></link>
 	</head>
 
-	<body x-data="{
+	<body 
+	
+	x-data="{
 		unlock_set: false,
 		message_status: '',
 		message_count: g_counter,
@@ -78,81 +82,16 @@
 
 		      >
 
-		      <h1><a href="https://defalsify.org/git/forro"
-			     x-text="getTitle"></a>
-		      </h1>
+			
 		      
 		<div id="app"> 
-			<div id="helpdiv" style="height: 6em;"
-					  x-show="isHelp"
-					  >
-			      <hr/>
-				<template x-data="{
-					help_cap: 128, // if set to 0 then no buffer
-					help_display_count: 5, // if help_cap is 0, ignore
-					help_contents: [],
-					help_lastcount: 0,
-					help_count: 0,
-					help_crsr: -1,
+			
 
-					addHelpContents(v) {
-						if (this.help_cap == 0) {
-							this.help_display_count = v.length;
-							this.help_count = v.length;
-							this.help_contents = v;
-							this.help_crsr = this.help_count - 1;
-						} else {
-							for (let i = 0; i < v.length; i++) {
-								this.help_crsr += 1;
-								this.help_crsr %= this.help_cap;
-								this.help_contents[this.help_crsr] = v[i];
-								if (this.help_count < this.help_cap) {
-									this.help_count += 1;
-								}
-							}
-						}
-						if (v.length > 0) {
-							this.help_lastcount = v.length;
-						}
-					},
+			<h1><a href="https://defalsify.org/git/forro"
+				x-text="getTitle"></a>
+			 </h1>
 
-					get helpContents() {
-						if (this.help_crsr < 0) {
-							return [];
-						}
-						let contents = [];
-
-						let l = this.help_display_count;
-						if (l > this.help_count) {
-							l = this.help_count;
-						}
-
-
-						let c = (this.help_crsr - l + 1);
-						if (c < 0) {
-							c = l + c;
-						}
-						
-						new_threshold = l - this.help_lastcount;
-						for (let i = 0; i < l; i++) {
-							if (this.help_cap > 0) {
-								c %= this.help_cap;
-							}
-							is_old = i < new_threshold;
-							v = [this.help_contents[c], is_old ? 'old' : 'new'];
-							contents.push(v); //this.help_contents[c]);
-							c += 1;
-						}
-						return contents;
-					},
-					}"
-					x-init="tryHelpFor('welcome');"
-					x-for="(v) in helpContents"
-					@help.window="addHelpContents($event.detail.v);">
-					<p style="font-size: 0.8em; line-height: 0.3em;" x-html="v[0]" :class="v[1]" />
-				</template>
-			</div>
-		<hr/>
+			
 		<div id="localkey" x-data="{
 			passphrase_cache: '',
 			passphrase_status: '',
@@ -165,6 +104,8 @@
 		      
 
 			x-show='!unlockedKey'
+			class="localkey-container"
+
 			>
 			<input name="pwd" type="password"
 				x-model='passphrase_cache'
@@ -172,6 +113,8 @@
 				@passfail.window='passphrase_status = "wrong_passphrase"; passphrase_cache = "";';
 				@messagestatechange.window='if (checkState(STATE["LOCAL_KEY"])) { passphrase_default_status = "please unlock key"; };'
 				@rst.window='passphrase_status = "please create new key";' 
+				class="input-passphrase"
+
 					  >
 			<button x-data="{
 					go_label: 'go',
@@ -183,12 +126,19 @@
 				@rst.window='go_label = "go";'
 
 				@click='setPwd(passphrase_cache);'
+				class="btn-primary"
+
 				></button>
 				
 
-			<button x-show='!haveKey' @click='tryHelpFor("nopass"); setPwd();' >without passphrase</button>
+			<button x-show='!haveKey' @click='tryHelpFor("nopass"); setPwd();'              class="btn-secondary"
+			>without passphrase</button>
 		</div>
-		<div id="message_panel"
+
+
+		<div class="container">
+
+		<div class="form" id="message_panel"
 			x-show='unlockedKey'
 			x-init='setUp();'
 			x-data="{
@@ -267,32 +217,131 @@
 					document.getElementById("fileAdder").value="";
 				}
 		       '>
-			<dl>
-				<dt>Status:</dt>
-				<dd x-text="message_status" x-on:messagestatechange.window="defaultname = !g_local_key_identified;"></dd>
+			   
+			
+				<div id="helpdiv" 
+					  x-show="isHelp"
+					  >
+					  <h3 class="title">Let's get in touch</h3>
 
-				<dt>Your identity:</dt>
-				<dd><a x-text="keyDisplay" title="Click to download your private key" x-bind:href="localKeyArmor" x-bind:download="localKeyFilename"></a></dd>
-				<dt>Their identity:</dt>
-				<dd><a x-text="rkeyDisplay" title="Click to download the recipient's public key" x-bind:href="remoteKeyArmor" x-bind:download="remoteKeyFilename"></a></dd>
-				<dt>Message number:</dt>
-				<dd x-text="message_count"></dd>
-				<dt>Your receipt:<dt>
-				<dd><a x-bind:href="g_data_endpoint + '/' + rcpt" x-text="rcpt"></a></dd>
-				<dt>Add message:</dt>
-				<dd>
+				<template x-data="{
+					help_cap: 128, // if set to 0 then no buffer
+					help_display_count: 5, // if help_cap is 0, ignore
+					help_contents: [],
+					help_lastcount: 0,
+					help_count: 0,
+					help_crsr: -1,
+
+					addHelpContents(v) {
+						if (this.help_cap == 0) {
+							this.help_display_count = v.length;
+							this.help_count = v.length;
+							this.help_contents = v;
+							this.help_crsr = this.help_count - 1;
+						} else {
+							for (let i = 0; i < v.length; i++) {
+								this.help_crsr += 1;
+								this.help_crsr %= this.help_cap;
+								this.help_contents[this.help_crsr] = v[i];
+								if (this.help_count < this.help_cap) {
+									this.help_count += 1;
+								}
+							}
+						}
+						if (v.length > 0) {
+							this.help_lastcount = v.length;
+						}
+					},
+
+					get helpContents() {
+						if (this.help_crsr < 0) {
+							return [];
+						}
+						let contents = [];
+
+						let l = this.help_display_count;
+						if (l > this.help_count) {
+							l = this.help_count;
+						}
+
+
+						let c = (this.help_crsr - l + 1);
+						if (c < 0) {
+							c = l + c;
+						}
+						
+						new_threshold = l - this.help_lastcount;
+						for (let i = 0; i < l; i++) {
+							if (this.help_cap > 0) {
+								c %= this.help_cap;
+							}
+							is_old = i < new_threshold;
+							v = [this.help_contents[c], is_old ? 'old' : 'new'];
+							contents.push(v); //this.help_contents[c]);
+							c += 1;
+						}
+						return contents;
+					},
+					}"
+					x-init="tryHelpFor('welcome');"
+					x-for="(v) in helpContents"
+					@help.window="addHelpContents($event.detail.v);">
+					<p x-html="v[0]" :class="v[1] == 'old' ? 'help-text old' : 'help-text new'" />
+
+				</template>
+			</div>
+
+				<div class="contact-form">
+				
+
+		 
+			<form autocomplete="off">
+				<h3 class="title">Get in touch!</h3>
+                  <div class="details">
+              
+				<div >
+						<label for="status">Status:</label>
+				        <span x-text="message_status" x-on:messagestatechange.window="defaultname = !g_local_key_identified;"></span>
+					</div>
+
+				<div>
+                   <label for="your-identity">Your identity:</label>
+				   <p><a x-text="keyDisplay" title="Click to download your private key" x-bind:href="localKeyArmor" x-bind:download="localKeyFilename"></a></p>
+				</div>
+
+
+				
+				<div>
+					<label for="their-identity">Their identity:</label>
+				    <p><a x-text="rkeyDisplay" title="Click to download the recipient's public key" x-bind:href="remoteKeyArmor" x-bind:download="remoteKeyFilename"></a></p>
+				</div>
+				
+				
+				<div>
+					<label for="message-number">Message number:</label>
+				<span x-text="message_count"></span>
+				</div>
+
+				<div>
+					<label for="receipt">Your receipt:</label>
+				    <p><a x-bind:href="g_data_endpoint + '/' + rcpt" x-text="rcpt"></a></p>
+				</div>
+			</div>	
+		<div class="input-container textarea">
+			<label for="">Message:</label>
+
 			<textarea 
-				cols=72
-				rows=10
+			 name="message"
+			 placeholder="message"
+			 class="input"
 				x-model="content"
 				@focus="tryHelpFor('writemsg');"
 				@messagestatechange.window="if (checkState(STATE.ACK_MESSAGE)) {console.log('foo'); content = '';}"
 				>
 			</textarea>
-			</dd>
-			<dt>Add files:</dt>
-			<dd>
-			<input type="file" id="fileAdder"
+		</div>
+		<div class="input-container">
+			<input  class="btn" type="file" id="fileAdder"
 				@change="fileChange();"
 				   />
 			<ol>
@@ -305,14 +354,13 @@
 					<li x-text="v"></li>
 				</template>
 			</ol>
-			</dd>
-			</dl>
-			<br/>
+			</div>
+
 			<div x-data='{ 
 				realname: "",
 				realemail: "",
 					    }'>
-				<div x-show='defaultname'
+				<div x-show='defaultname  && !g_local_key_identified'
 				     x-data='{
 					identify: false,
 				     }'
@@ -323,8 +371,12 @@
 						<option value=0 defaultselected>Stay anonymous</option>
 						<option value=1>Identify yourself</option>
 					</select>
-					<div x-show="identify">
-						<input name="id_name" placeholder="name" x-model="realname" /> <input name="id_email" placeholder="email" x-model="realemail" />
+					<div class="input-container identify" x-show="identify">
+						
+						<input name="id_name" class="input" type="text" placeholder="Name" x-model="realname" />
+						<input name="id_email"  class="input" type="email" placeholder="Email" x-model="realemail" />
+  
+ 
 					</div>
 				</div>
 				<div x-data="{
@@ -333,21 +385,25 @@
 					x-on:messagestatechange.window='ready = checkState(STATE["RTS"]);'
 						>
 					<button 
+						class="btn"
 						x-bind:disabled='!ready'
-						@click="tryDispatch(content, realname, realemail, filez);">sign, encrypt and send</button>
+						@click="tryDispatch(content, realname, realemail, filez);">
+						sign, encrypt and send
+					</button>
 				</div>
 			</div>
+			
+		</form>  
+		<div id="reset" x-data="{ rst: false }">
+			<button  x-show="haveKey && !rst" @click="rst = true;">Discard key</button>
+			<button  x-show="rst" @click="if (confirm('Are you sure you want to discard the key?')) { rst = false; $dispatch('rst'); purgeLocalKey(); }">Discard key</button> 
 		</div>
-		<div id="reset"
-			x-data="{
-			rst: false,
-		     }">
-			<button x-show='haveKey && !rst' @click='rst = true;'>Discard key</button>
-			<button x-show='rst' @dblclick='rst = false; $dispatch("rst"); purgeLocalKey();'>Double click to confirm discard key</button>
+			</div>
 		</div>
-
+	</div>
+		
+		
 		<div id="dev" x-show='isDev'>
-		<hr/>
 		<h2>Devmode details</h2>
 			<dl>
 				<dt>last event</dt>
