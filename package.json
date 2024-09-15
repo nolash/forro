@@ -1,5 +1,22 @@
 {
 	"name": "forro",
+	"description": "End-to-end encrypted contract form based on PGP",
+	"keywords": "pgp,contact,web,communication,privacy,encryption",
+	"homepage": "https://defalsify.org/git/forro",
+	"funding": [
+		{
+			"type": "individual",
+			"url": "bitcoin:1PfFbhKd32W6GfR6MLVifCrgqw47czA5LV"
+		},
+		{
+			"type": "invididual",
+			"url": "ethereum:0x98d0D0a1992d9A0c3C84ccb92182A05c852972d1"
+		}
+	],
+	"repository": {
+		"type": "git",
+		"url": "git://git.defalsify.org/forro"
+	},
 	"version": "0.1.0",
 	"license": "AGPL-3.0-or-later",
 	"author": "Louis Holbrook <dev@holbrook.no> (https://holbrook.no)",
