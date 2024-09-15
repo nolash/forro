@@ -1,8 +1,11 @@
 {
 	"name": "forro",
-	"version": "0.1.0-rc.4",
-	"license": "GPLv3",
+	"version": "0.1.0",
+	"license": "AGPL-3.0-or-later",
 	"author": "Louis Holbrook <dev@holbrook.no> (https://holbrook.no)",
+	"contributors": [
+		"Abdallah Wario <abdallwario96@gmail.com>"
+	],
 	"dependencies": {
 		"alpinejs": "3.10.3",
 		"openpgp": "5.5.0",

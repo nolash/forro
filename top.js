@@ -66,6 +66,6 @@ let g_state = 0;
 let g_helpstate = 0;
 let g_counter = undefined;
 let g_files = {};
-let g_version = '0.1.0-rc.1';
+let g_version = '0.1.0';
 let g_from = 'no-reply@localhost';
 let g_from_name = 'Forro v' + g_version;
