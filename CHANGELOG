@@ -1,5 +1,6 @@
 - 0.1.0
 	* Ensure private key is downloadable when created
+	* Modernize UI
 - 0.0.9
 	* Update forro repo link in heading
 - 0.0.8
