@@ -1,5 +1,5 @@
 {
-	"remote_pubkey_url": "publickey.asc",
+	"remote_pubkey_url": "merman.asc",
 	"data_endpoint": "http://localhost:8001",
 	"help": true,
 	"dev": true,

@@ -146,6 +146,7 @@ async function applyLocalKey() {
  * Application entry point
  */
 async function setUp() {
+	console.debug('running setup');
 	let settings = await loadSettings();
 	if (settings.dev) {
 		stateChange("devmode on", STATE.DEV);
@@ -160,9 +161,14 @@ async function setUp() {
 	}
 	if (settings.email_sender) {
 		g_from = settings.email_sender;
+		g_from_user = settings.email_sender_user;
+		g_from_domain = settings.email_sender_domain;
 	}
 	if (settings.email_sender_name) {
 		g_from_name = settings.email_sender_name;
+	}
+	if (settings.email_message_id_domain) {
+		g_message_id_domain = settings.email_message_id_domain;
 	}
 
 	stateChange('loaded settings', STATE['SETTINGS']);
@@ -705,12 +711,13 @@ async function tryHelpFor(...k) {
 async function buildMessage(message, files, pubkey) {
 	let msg = {
 		fromName: g_from_name,
-		from: g_from,
+		from: g_from_user + '+' + g_local_key_id + '@' + g_from_domain,
 		to: g_remote_key_email,
 		subject: 'contact form message',
 		body: message,
 		cids: [],
 		attaches: [],
+		messageIdDomain: g_message_id_domain,
 	};
 	for (v in files) {
 		const data = v.target;

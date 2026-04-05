@@ -86,6 +86,13 @@ The submitted content is signed with the client's PGP key. The reference to the 
 See [the wala code](https://defalsify.org/git/wala-rust/file/README.html) for a description on how to submit content in a similar manner using the CLI.
 
 
+## Testing
+
+The public/private key pair used in the settings sample in included in this repository as `merman.asc` and `merman_private.asc`. Use the passphrase "merman" to unlock the private key.
+
+**Do NOT use this private key for any other purpose!**
+
+
 ## License
 
 AGPLv3+
