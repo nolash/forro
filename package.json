@@ -17,16 +17,17 @@
 		"type": "git",
 		"url": "git://git.defalsify.org/forro"
 	},
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"license": "AGPL-3.0-or-later",
 	"author": "Louis Holbrook <dev@holbrook.no> (https://holbrook.no)",
 	"contributors": [
 		"Abdallah Wario <abdallwario96@gmail.com>"
 	],
 	"dependencies": {
-		"MimeJS": "git+https://git.defalsify.org/mime-js#lash/msgiddomain",
 		"alpinejs": "3.10.3",
 		"jssha": "3.2.0",
+		"magic-bytes.js": "^1.13.0",
+		"MimeJS": "git+https://git.defalsify.org/mime-js#lash/msgiddomain",
 		"openpgp": "^6.3.0"
 	},
 	"engines": {
